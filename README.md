@@ -13,4 +13,3 @@ There are no dependencies.
 ## Examples
 Besides the examples below, there is an examples folder in this repository.
 The files are doxygen ready.
-

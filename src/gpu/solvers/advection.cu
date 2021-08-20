@@ -1,74 +1,148 @@
-//This advects a scalar quantity
-__global__
-void k_advection_2d_f32(const float height, const float width,const int m_q, const int k_q, const float* U, int stride_row_u, int stride_col_u, const float* Q, int stride_row_q, int stride_col_q, float dt, float* C, int stride_row_c, int stride_col_c){
-	const int TILE_WIDTH=16; 
-	const int TILE_HEIGHT=16;
-	const int BLOCK_THREADS_X=32;
-	const int BLOCK_THREADS_Y=32;
-	int tx=threadIdx.x;
-	int ty=threadIdx.y;
-	int bx=blockIdx.x;
-	int by=blockIdx.y;
-	int off_u=by*TILE_HEIGHT*BLOCK_THREADS_Y*stride_col_u+2*bx*TILE_WIDTH*BLOCK_THREADS_X+ty*BLOCK_THREADS_Y*stride_col_u+2*tx*TILE_WIDTH*BLOCK_THREADS_X*stride_col_u;
-	int off_q=by*TILE_HEIGHT*BLOCK_THREADS_Y*stride_col_q+bx*TILE_WIDTH*BLOCK_THREADS_X+ty*BLOCK_THREADS_Y*stride_col_q+tx*TILE_WIDTH*BLOCK_THREADS_X*stride_col_q;	
-	int off_cx=bx*TILE_WIDTH*BLOCK_THREADS_X+tx*TILE_WIDTH*BLOCK_THREADS_X*stride_col_c;
-	int off_cy=by*TILE_HEIGHT*BLOCK_THREADS_Y*stride_col_c+y*BLOCK_THREADS_Y*stride_col_c;
-	int off_c=off_cx+off_cy;
+#include <stdio.h>
 
-	float inv_width=1.0/width;
-	float inv_height=1.0/height;
-	for (int i=0;i<TILE_HEIGHT;i++){
-		for (int j=0;j<TILE_WIDTH; j++){
-			float wux=dt*U[off_u+i*stride_col_u+j*2*stride_row_u];
-			float wuy=dt*U[off_u+i*stride_col_u+j*2*stride_row_u+1];
-			float gux=ux*inv_width;
-			float guy=uy*inv_height;
-			int gx=off_cx+gux*k;
-			gx=(gx < 0)? 0 : (gx >= k_q)? k_q : gx;
-			int gy=off_gy+guy*m;
-			gy=(gy < 0)? 0 : (gy >= m_q)? kW_q : gy;
-			C[off_c+i*stride_col_c+j*stride_row_c]=Q[off_q+i*stride_col_q+j*stride_row_q+gx+gy];
-		}
+//static cudaArray* tex_array;
+//m_q: Number of vertical interior grid points, k_q: Number of horizontal grid points
+__global__
+void k_advection_2D_f32(float dt, float dy, float dx, int m_q, int k_q, float2* U, int pitch_u, cudaTextureObject_t Q, float* C, int pitch_c){
+	
+	const int TILE_WIDTH=8; 
+	const int TILE_HEIGHT=8;
+
+	int idy=blockIdx.y*blockDim.y*TILE_HEIGHT+threadIdx.y*TILE_HEIGHT;
+	int idx=blockIdx.x*blockDim.x*TILE_WIDTH+threadIdx.x*TILE_WIDTH;
+	
+	int i=0;
+
+	float2 p;
+	C=(float*) ((char*)C+idy*pitch_c);
+	U=(float2*) ((char*)U+idy*pitch_u);
+	float2* U_ptr=U;
+	float* C_ptr=C;
+
+	while (i<m_q){
+		for (int i1=0;i1<TILE_HEIGHT;i1++){
+			int fy=idy+i1;			
+			if ((fy+i)<m_q){
+				int j=0;
+				while(j<k_q){
+				//printf("y:%d\n",fy);	
+					for (int i2=0;i2<TILE_WIDTH;i2++){
+						int fx=idx+i2;
+						if ((fx+j)<k_q){
+							//printf("i: %d j: %d y: %d x:%d\n",i,j,fy,fx);
+							float2 v=U_ptr[fx+j];
+							p.x=(fx+j+1.5f)-(dt*v.x*dx);
+							p.y=(fy+i+1.5f)-(dt*v.y*dx);
+							float q=tex2D<float>(Q,p.x,p.y);
+							C_ptr[fx+j]=q;					
+						}		
+						else{
+							break;
+						}
+					}					
+					j+=gridDim.x*blockDim.x*TILE_WIDTH;	
+				}		
+			}						
+			C_ptr=(float*) ((char*)C_ptr+pitch_c);
+			U_ptr=(float2*) ((char*)U_ptr+pitch_u);
+		}	
+		i+=gridDim.y*blockDim.y*TILE_HEIGHT;
+		C_ptr=(float*) ((char*)C+i*pitch_c);
+		U_ptr=(float2*) ((char*)U+i*pitch_u);		
 	}
 }
+
+__global__
+void k_advection_2d_f32(float dt, float dy, float dx, int m_q, int k_q, float2* U, int pitch_u, cudaTextureObject_t Q, float2* C, int pitch_c){
+	const int TILE_WIDTH=8; 
+	const int TILE_HEIGHT=8;
+
+	int idy=blockIdx.y*blockDim.y*TILE_HEIGHT+threadIdx.y*TILE_HEIGHT;
+	int idx=blockIdx.x*blockDim.x*TILE_WIDTH+threadIdx.x*TILE_WIDTH;
+	
+	int i=0;
+
+	float2 p;
+	C=(float2*) ((char*)C+idy*pitch_c);
+	U=(float2*) ((char*)U+idy*pitch_u);	
+	float2* U_ptr=U;
+	float2* C_ptr=C;
+
+	while (i<m_q){
+		for (int i1=0;i1<TILE_HEIGHT;i1++){
+			int fy=idy+i1;			
+			if ((fy+i)<m_q){
+				int j=0;			
+				while(j<k_q){
+				//printf("y:%d\n",fy);	
+					for (int i2=0;i2<TILE_WIDTH;i2++){
+								
+						int fx=idx+i2;
+						if ((fx+j)<k_q){
+							//printf("i: %d j: %d y: %d x:%d\n",i,j,fy,fx);
+							float2 v=U_ptr[fx+j];
+							p.x=(fx+j+1.5f)-(dt*v.x*dx);// we add 1.5 because of boundary conditions offset, else it would be 0.5
+							p.y=(fy+i+1.5f)-(dt*v.y*dx);// we add 1.5 because of boundary conditions offset, else it would be 0.5
+							float2 q=tex2D<float2>(Q,p.x,p.y);
+							C_ptr[fx+j]=q;					
+						}		
+						else{
+							break;
+						}
+					}					
+					j+=gridDim.x*blockDim.x*TILE_WIDTH;	
+				}		
+			}						
+			C_ptr=(float2*) ((char*)C_ptr+pitch_c);
+			U_ptr=(float2*) ((char*)U_ptr+pitch_u);
+		}	
+		i+=gridDim.y*blockDim.y*TILE_HEIGHT;
+		C_ptr=(float2*) ((char*)C+i*pitch_c);
+		U_ptr=(float2*) ((char*)U+i*pitch_u);		
+	}
+}
+
 
 __host__
-void advection_2d_f32(const float height, const float width,const int m_q, const int k_q, const float* U_h, int stride_row_u, int stride_col_u, const float* Q_h, int stride_row_q, int stride_col_q, float dt, float* C_h, int stride_row_c, int stride_col_c){
-if ((n_q==0) || (m_q==0)){
+void advection_2D_f32_device(float dt, float dy, float dx,  int m_q,  int k_q, float2* U_d, int pitch_u, float* Q_d, int pitch_q, float* C_d, int pitch_c){
+	if ((m_q<3) || (k_q<3)){
 		return;
 	}
-	
-	float* Q_d;
-	float* U_d;
-	float* C_d;
-	int sizeQ=m_q*k_q;
-	int sizeU=2*sizeQ;
-	int sizeC=sizeQ;
-	cudaMalloc((void**)&Q_d, sizeof(float)*sizeQ);
-	cudaMalloc((void**)&U_d,sizeof(float)*sizeU);
-	cudaMalloc((void**)&C_d,sizeof(float)*sizeC);
 
-	cudaError_t copy1=cudaMemcpy((void*) Q_d, (void*) Q_h, sizeQ,cudaMemcpyHostToDevice);
-	cudaError_t copy2=cudaMemcpy((void*) U_d, (void*) U_h, sizeU,cudaMemcpyHostToDevice);
-	cudaError_t copy3=cudaMemcpy((void*) C_d, (void*) C_h, sizeC,cudaMemcpyHostToDevice);	
+	//Create Resource description
+	cudaResourceDesc resDesc;
+	memset(&resDesc,0,sizeof(resDesc));
+
+	resDesc.resType = cudaResourceTypePitch2D;
+	resDesc.res.pitch2D.devPtr=Q_d;
+	resDesc.res.pitch2D.width=k_q;
+	resDesc.res.pitch2D.height=m_q;
+	resDesc.res.pitch2D.pitchInBytes=pitch_q;
+	resDesc.res.pitch2D.desc=cudaCreateChannelDesc<float>(); //is equivalent to cudaCreateChannelDesc<float>()
 	
-	
-	if ((copy1==cudaSuccess) && (copy2==cudaSuccess) && (copy3==cudaSuccess)){
-		float bsmx=32; //blocksize x
-		float bsmy=32; //blocksize y	
-		float tbx=32; //threadsize x
-		float tby=32; //threadsize y		
-		dim3 threadLayout=dim3(tbx,tby,1);
-		dim3 grid=dim3(ceil(m_q/bsmx),ceil(k_q/bsmy),1);
-		k_advection_2d_f32<<<grid,threadLayout>>>(height,width,m_q,k_q,U_d,stride_row_u,stride_col_u,Q_d,stride_row_q,stride_col_q,dt,C_d,stride_row_c,stride_col_c);	
-		
-		cudaMemcpy((void*)C_h,(void*)C_d,sizeA,cudaMemcpyDeviceToHost);
-		
+	/*
+	resDesc.res.pitch2D.desc=cudaCreateChannelDesc(32,32,0,0,cudaChannelFormatKindFloat); //is equivalent to cudaCreateChannelDesc<float2>()
+*/
+	//Create Texture description
+	cudaTextureDesc texDesc;
+	memset(&texDesc,0,sizeof(texDesc));
+    texDesc.normalizedCoords = false;
+	texDesc.filterMode = cudaFilterModeLinear;
+	texDesc.readMode=cudaReadModeElementType;
+    texDesc.addressMode[0] = cudaAddressModeClamp;
+
+	//Create Texture Object
+	cudaTextureObject_t Q_tex;
+    cudaError_t error1=cudaCreateTextureObject(&Q_tex, &resDesc, &texDesc, NULL);
+	if (error1 !=cudaSuccess){
+		printf("Errorcode: %d\n",error1);
 	}
-	else{
-		printf("Error copying value to device in k_advection_2d_f32\n");
-	}
-	cudaFree(Q_d);
-	cudaFree(U_d);
-	cudaFree(C_d);
+	printf("w, h: %d,%d\n",k_q,m_q);
+	float* C_ptr=(float*) ((char*)C_d+pitch_c)+1;
+	float2* U_ptr=(float2*) ((char*)U_d+pitch_u)+1;
+	k_advection_2D_f32<<<dim3(1,1,1),dim3(8,4,1)>>>(dt,dy,dy,m_q-2,k_q-2,U_ptr,pitch_u,Q_tex,C_ptr,pitch_c);
+
+
 }
+
+
