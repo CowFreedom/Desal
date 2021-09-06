@@ -3,7 +3,7 @@
  * It mirrors the calculations done in e.g. pg. 22 in "Forward Osmosis Fundamentals and Applications" by Ho Kyong Shon et al.
  */
 #include <iostream>
-#include <optional>
+#include<optional>
 import desal.forward_osmosis.flux_models;
 import desal.math;
 

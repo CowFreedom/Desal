@@ -6,7 +6,7 @@ This example returns the maximum water flux through a membrane under the followi
 
 ## Usage
 A build script *buildtask_gcc.cmd* is included in this folder. On Windows, you can use it to compile 
-the example. Alternatively, you can open the build script, look for the gcc statements and compile it manually.
+the example. Alternatively, you can open the build script, look for the compilation statements and compile it manually.
 
 ## What do I see
 
