@@ -24,8 +24,7 @@ jobs:
     runs-on: ${{matrix.os}}
               
     -name: Configure
-     run: |
-          cd tests         
+     run: cd tests         
             
     - name: Test (Windows)
       if: ${{matrix.os =='windows-latest' && matrix.config == ''}}
