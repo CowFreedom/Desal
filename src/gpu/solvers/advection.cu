@@ -32,7 +32,7 @@ void k_advection_2D_f32(float dt, float dy, float dx, int m_q, int k_q, float2* 
 							//printf("i: %d j: %d y: %d x:%d\n",i,j,fy,fx);
 							float2 v=U_ptr[fx+j];
 							p.x=(fx+j+1.5f)-(dt*v.x*dx);
-							p.y=(fy+i+1.5f)-(dt*v.y*dx);
+							p.y=(fy+i+1.5f)-(dt*v.y*dy);
 							float q=tex2D<float>(Q,p.x,p.y);
 							C_ptr[fx+j]=q;					
 						}		
