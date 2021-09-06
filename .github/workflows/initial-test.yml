@@ -1,0 +1,33 @@
+name initial-test
+
+on:
+    push:
+        paths-ignore:
+            - '**.md'
+            - 'examples/**'
+            
+        pull_request:
+            - '**.md'
+            - 'examples/**'
+            
+            
+jobs:
+    build:
+        name: Build and test
+        
+        strategy:
+            matrix:
+                config: ['']
+                os: [ubuntu-20.04, macos-latest, windows-latest]
+                fail-fast: false
+                
+    runs-on: ${{matrix.os}}
+              
+    -name: Configure
+     run: |
+          cd tests         
+            
+    - name: Test (Windows)
+      if: ${{matrix.os =='windows-latest' && matrix.config == ''}}
+      run: cl test.cpp && test.exe
+      working-directory: tests
