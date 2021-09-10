@@ -91,6 +91,13 @@ void fill_matrix_k(int m,int k, float2* U, int pitch_u){
 	}
 }
 
+__global__
+void fill_array_k(int m,float* v, int stride_v){
+	for (int i=0;i<m;i++){
+		v[i*stride_v]=i;	
+	}
+}
+
 
 __global__
 void print_vector_field_k(int m,int k, float2* M, int pitch,char name){
@@ -104,11 +111,37 @@ void print_vector_field_k(int m,int k, float2* M, int pitch,char name){
 	}	
 }
 
+__global__
+void print_matrix_k(int m,int k, float* M, int stride_col,int stride_row,char name){
+	printf("%c:\n",name);
+	for (int i=0;i<m;i++){
+		for (int j=0;j<k;j++){
+			printf("%.1f ",M[i*stride_col+j*stride_row]);
+		}
+		printf("\n");
+	}	
+}
+
+
+__host__
+void run_example2(int n){
+	float* v;
+	int size_v=sizeof(float)*n;
+	cudaMalloc((void**) &v,size_v);
+	
+	fill_array_k<<<1,1>>>(n,v,1);
+	reduce_sum_f32_device(n,v,1);	
+	print_matrix_k<<<1,1>>>(1,n,v,n,1, 'v');
+
+	
+	cudaFree(v);
+}
+
 __host__
 void run_example(float width, float height, int m, int k){
 	float2* U; //flow field vector
-	float2* C; // stores results of the advected quantity field Q
-	
+	float2* C; // stores diffused velocity field
+
 
 	float dt=1; //step size of the solver
 	float dx=width/k;
@@ -133,9 +166,10 @@ void run_example(float width, float height, int m, int k){
 	print_vector_field_k<<<1,1>>>(m,k,U,pitch_u,'U');
 
 	float alpha=(dx*dy)/(v*dt);
+	
 	float beta=4.0+alpha;
 	float2* C_ptr=(float2*) ((char*)C+pitch_c)+1;
-	cudaMemset2D(C_ptr,pitch_c,0.0,(k-2)*sizeof(float2),m-2);	
+	cudaMemset2D(C_ptr,pitch_c,0.0,(k-2)*sizeof(float2),m-2);		cudaMemset2D(C_ptr,pitch_c,0.0,(k-2)*sizeof(float2),m-2);	
 
 	mg_vc_poisson_2D_f32(alpha, beta, m,k, U, pitch_u, C, pitch_c); //only use interior points
 	
@@ -151,5 +185,7 @@ int main(){
 	float height=18.0; //height of the rectangular grid
 	float x_points=18; //number of gridpoints (including boundary points) in x direction 
 	float y_points=18; //number of gridpoints (including boundary points) in y direction
-	run_example(width,height,x_points,y_points);
+	//run_example(width,height,x_points,y_points);
+	
+	run_example2(90);
 }

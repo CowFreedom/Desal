@@ -130,6 +130,7 @@ void advection_2D_f32_device(float dt, float dy, float dx,  int m_q,  int k_q, f
 	texDesc.filterMode = cudaFilterModeLinear;
 	texDesc.readMode=cudaReadModeElementType;
     texDesc.addressMode[0] = cudaAddressModeClamp;
+	texDesc.addressMode[1] = cudaAddressModeClamp;
 
 	//Create Texture Object
 	cudaTextureObject_t Q_tex;

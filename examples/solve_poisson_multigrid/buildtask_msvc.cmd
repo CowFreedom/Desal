@@ -22,4 +22,4 @@ nvcc  %curpath:~0,-1%\main.cu gpu_poisson.obj gpu_reductions.obj hostgpu_binding
 del *.o *.out *.obj *.exp *.lib
 rmdir /q /s gcm.cache
 
-::main.exe
+main.exe
