@@ -59,7 +59,7 @@ void d_warp_reduce_sum(volatile F* sdata, int tx){
 //AX=B
 template<unsigned int THREADS_X_PER_BLOCK,unsigned int THREADS_Y_PER_BLOCK, class F, class F2>
 __global__
-void k_reduce_sum_of_squares_poisson_field_residual(F alpha_inv, F beta, F boundary_padding_thickness, int n, cudaTextureObject_t A,cudaTextureObject_t B, F* r, int stride_r){
+void k_reduce_sum_of_squares_poisson_field_residual(F alpha_inv, F beta, int boundary_padding_thickness, int n, cudaTextureObject_t A,cudaTextureObject_t B, F* r, int stride_r){
 //printf("Durch\n");
 
 	if (n< (blockIdx.x*2*blockDim.x) || n<(blockIdx.y*blockDim.y)){
@@ -78,12 +78,12 @@ void k_reduce_sum_of_squares_poisson_field_residual(F alpha_inv, F beta, F bound
 	int ty=threadIdx.y;
 	//printf("alpha_inv: %f, beta: %f\n",alpha_inv,beta);
 
-	for (int hs=0;hs<n;hs+=gridDim.y*blockDim.y){
-		int fy=idy+hs;
-		int fx=idx;		
+	for (int fy=idy;fy<n;fy+=gridDim.y*blockDim.y){
+		//int fy=idy+hs;
+		//int fx=idx;		
 		
-		for (int ws=0;ws<n;ws+=gridDim.x*2*blockDim.x){
-			fx+=ws;
+		for (int fx=idx;fx<n;fx+=gridDim.x*2*blockDim.x){
+			//fx+=ws;
 			int index=ty*blockDim.x+tx;
 			
 			if (fx<n && fy<n){
@@ -181,6 +181,52 @@ void k_reduce_sum_of_squares_poisson_field_residual(F alpha_inv, F beta, F bound
 	}
 
 }
+
+/*
+template<unsigned int THREADS_X_PER_BLOCK,unsigned int THREADS_Y_PER_BLOCK, class F, class F2>
+__global__
+void k_sum_of_squares_poisson_field_residual(F alpha_inv, F beta, int boundary_padding_thickness, int n, cudaTextureObject_t A,cudaTextureObject_t B, F* r, int stride_r){
+//printf("Durch\n");
+
+	if (n< (blockIdx.x*blockDim.x) || n<(blockIdx.y*blockDim.y)){
+		return;
+	}
+
+
+	int idy=blockIdx.y*blockDim.y+threadIdx.y;
+	int idx=blockIdx.x*blockDim.x+threadIdx.x;
+	int tx=threadIdx.x;
+	int ty=threadIdx.y;
+	//printf("alpha_inv: %f, beta: %f\n",alpha_inv,beta);
+
+	for (int hs=0;hs<n;hs+=gridDim.y*blockDim.y){
+		int fy=idy+hs;
+		int fx=idx;		
+		
+		for (int ws=0;ws<n;ws+=gridDim.x*2*blockDim.x){
+			fx+=ws;
+
+			if (fx<n && fy<n){
+				F2 v=tex2D<F2>(A,fx+boundary_padding_thickness+0.5,fy+boundary_padding_thickness+0.5);
+				F2 vlower=tex2D<F2>(A,fx+boundary_padding_thickness+0.5,fy-1+boundary_padding_thickness+0.5);
+				F2 vupper=tex2D<F2>(A,fx+boundary_padding_thickness+0.5,fy+1+boundary_padding_thickness+0.5);
+				F2 vleft=tex2D<F2>(A,fx-1+boundary_padding_thickness+0.5,fy+boundary_padding_thickness+0.5);
+				F2 vright=tex2D<F2>(A,fx+1+boundary_padding_thickness+0.5,fy+boundary_padding_thickness+0.5);
+				
+				F2 b=tex2D<F2>(B,fx+boundary_padding_thickness+0.5,fy+boundary_padding_thickness+0.5);
+				
+				F2 diff;
+				diff.x=b.x-(beta*v.x-vleft.x-vright.x-vupper.x-vlower.x)*alpha_inv;
+				diff.y=b.y-(beta*v.y-vleft.y-vright.y-vupper.y-vlower.y)*alpha_inv;
+	
+			//	r[(idy*gridDim.x*blockDim.x+blockIdx.x*blockDim.x+tx)*stride_r]=diff.x*diff.x+diff.y*diff.y;
+			
+			}
+		
+		}
+	}
+}
+*/
 
 /*Reduces an array with n elements to log_b(n) its size by summing its entries, whereas b is the number of blocks in the grid.*/
 template<unsigned int THREADS_X_PER_BLOCK, class F>
@@ -371,7 +417,60 @@ void reduce_sum_of_squares_poisson_field_residual_device(F alpha, F beta, int bo
 	
 }
 
+
+template<class F, class F2>
 __host__
-void reduce_sum_of_squares_poisson_field_residual_f32_device(float alpha, float beta, float boundary_offset, int n, float2* A_d,int pitch_a, float2* B_d, int pitch_b, float* r_d, int stride_r){
-	reduce_sum_of_squares_poisson_field_residual_device<float,float2>(alpha, beta, boundary_offset, n, A_d,pitch_a, B_d, pitch_b, r_d, stride_r);
+void reduce_sum_of_squares_poisson_field_residual_device(F alpha, F beta, int boundary_padding_thickness, int n, F2* A_d,int pitch_a, cudaTextureObject_t B_tex, F* r_d, int stride_r){
+	if (r_d==nullptr || alpha==0.0 || beta ==0.0 ){
+		return;
+	}
+	
+	F alpha_inv=1.0/alpha;
+	constexpr int threads_per_block_x=512;
+	constexpr int threads_per_block_y=2;
+	
+	//TODO: Check if both variables above are power of two and smaller than 1024
+		
+	//Create Resource descriptions
+	cudaResourceDesc resDescA;
+	memset(&resDescA,0,sizeof(resDescA));
+	resDescA.resType = cudaResourceTypePitch2D;
+	resDescA.res.pitch2D.devPtr=A_d;
+	resDescA.res.pitch2D.width=n-boundary_padding_thickness;
+	resDescA.res.pitch2D.height=n-boundary_padding_thickness;
+	resDescA.res.pitch2D.pitchInBytes=pitch_a;
+	resDescA.res.pitch2D.desc=cudaCreateChannelDesc<F2>(); //is equivalent to cudaCreateChannelDesc(32,32,0,0,cudaChannelFormatKindFloat)
+
+	//Create Texture description
+	cudaTextureDesc texDesc;
+	memset(&texDesc,0,sizeof(texDesc));
+    texDesc.normalizedCoords = false;
+	texDesc.filterMode = cudaFilterModePoint;
+	texDesc.readMode=cudaReadModeElementType;
+    texDesc.addressMode[0] = cudaAddressModeBorder;
+    texDesc.addressMode[1] = cudaAddressModeBorder;
+
+	//Create Texture Object
+	cudaTextureObject_t A_tex;
+	//printf("nOn: %d\n",n*n);
+    cudaError_t error1=cudaCreateTextureObject(&A_tex, &resDescA, &texDesc, NULL);
+	if ((error1 !=cudaSuccess)){
+		printf("Errorcode: %d\n",error1);
+	}
+		
+	int blocks_x=ceil(static_cast<F>(n)/(2*threads_per_block_x));
+	int blocks_y=ceil(static_cast<F>(n)/(2*threads_per_block_y));
+	
+	dim3 blocks=dim3(blocks_x,blocks_y,1);
+	dim3 threads=dim3(threads_per_block_x,threads_per_block_y,1);
+	k_reduce_sum_of_squares_poisson_field_residual<threads_per_block_x,threads_per_block_y,F,F2><<<blocks,threads>>>(alpha_inv,beta,boundary_padding_thickness,n-2*boundary_padding_thickness, A_tex,B_tex, r_d,stride_r);
+	
+	n=blocks_x*blocks_y;
+	
+	reduce_sum_f32_device(n,r_d,stride_r);
+}
+
+__host__
+void reduce_sum_of_squares_poisson_field_residual_f32_device(float alpha, float beta, int boundary_padding_thickness, int n, float2* A_d,int pitch_a, float2* B_d, int pitch_b, float* r_d, int stride_r){
+	reduce_sum_of_squares_poisson_field_residual_device<float,float2>(alpha, beta, boundary_padding_thickness, n, A_d,pitch_a, B_d, pitch_b, r_d, stride_r);
 }

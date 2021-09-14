@@ -14,7 +14,6 @@ void fill_array_descendingly_f64(int n, double* arr, int stride, int offset=0);
 __host__
 void fill_array_ascendingly2D_f32(int m, int k, int boundary_padding_thickness, float2* U, int pitch_u, int offset=0);
 
-
 template<class F2>
 __global__
 void k_fill_array_uniformly2D_field(int m,int k,int boundary_padding_thickness, F2* U,int pitch_u, F2 val, int offset=0){

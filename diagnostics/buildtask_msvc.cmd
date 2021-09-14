@@ -12,6 +12,7 @@ if defined USE_CUDA (
 	::Building CUDA sources
 	nvcc %curpath:~0,-1%\..\src\gpu\cuda\solvers\poisson_multigrid.cu -c -o gpu_poisson.obj
 	nvcc %curpath:~0,-1%\..\src\gpu\cuda\reductions.cu -c -o gpu_reductions.obj
+	nvcc %curpath:~0,-1%\..\src\gpu\cuda\transformations.cu -c -o gpu_transformations.obj
 	
 	::Building GPU Module
 	cl /Dopt_use_cuda /EHsc /std:c++latest /O2  /c %curpath:~0,-1%\..\src\gpu\gpu_module.cpp /interface
@@ -21,6 +22,7 @@ if defined USE_CUDA (
 	
 	::Building CUDA GPU tests
 	nvcc %curpath:~0,-1%\correctness\gpu\cuda\test_reductions.cu -c -o gpu_test_reductions.obj
+	nvcc %curpath:~0,-1%\correctness\gpu\cuda\test_solvers.cu -c -o gpu_test_solvers.obj
 	
 	::Building gpu correctness test submodules and entire module
 	cl /Dopt_use_cuda /EHsc /std:c++latest /O2  /c %curpath:~0,-1%\correctness/test_gpu.cpp /interface	
@@ -28,7 +30,7 @@ if defined USE_CUDA (
 	
 	nvcc %curpath:~0,-1%\correctness\gpu\cuda\utility.cu -c -o gpu_test_utility.obj
 	
-	cl /EHsc /Dopt_use_cuda /std:c++latest /O2  %curpath:~0,-1%\run_diagnostics.cpp test_gpu.obj gpu_test_reductions.obj gpu_test_utility.obj gpu_module.obj tests.obj correctness.obj gpu_poisson.obj gpu_reductions.obj /link /LIBPATH:%cudapath% cudart.lib
+	cl /EHsc /Dopt_use_cuda /std:c++latest /O2  %curpath:~0,-1%\run_diagnostics.cpp test_gpu.obj gpu_test_solvers.obj gpu_transformations.obj gpu_test_reductions.obj gpu_test_utility.obj gpu_module.obj tests.obj correctness.obj gpu_poisson.obj gpu_reductions.obj /link /LIBPATH:%cudapath% cudart.lib
 
 	
 )
