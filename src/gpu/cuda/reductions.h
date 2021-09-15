@@ -7,3 +7,7 @@ void reduce_sum_of_squares_poisson_field_residual_f32_device(float alpha, float 
 void reduce_sum_f32_device(int n, float* r_d, int stride_r);
 
 void reduce_sum_f64_device(int n, double* r_d, int stride_r);
+
+template<class F2>
+void restrict(int n, F2* dest, int pitch_dest, F2* src, int pitch_src);
+

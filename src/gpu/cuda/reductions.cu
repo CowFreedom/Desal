@@ -61,21 +61,29 @@ template<unsigned int THREADS_X_PER_BLOCK,unsigned int THREADS_Y_PER_BLOCK, clas
 __global__
 void k_reduce_sum_of_squares_poisson_field_residual(F alpha_inv, F beta, int boundary_padding_thickness, int n, cudaTextureObject_t A,cudaTextureObject_t B, F* r, int stride_r){
 //printf("Durch\n");
-
+	n-=2*boundary_padding_thickness;
 	if (n< (blockIdx.x*2*blockDim.x) || n<(blockIdx.y*blockDim.y)){
 		return;
 	}
+		
+	
+	int effective_gridDim_x=ceil(n/(2.0*THREADS_X_PER_BLOCK));
 	//printf("n: %d, idx:%d, idy: %d\n",n,blockIdx.x*2*blockDim.x,blockIdx.y*blockDim.y);
 	constexpr int blocksize=THREADS_X_PER_BLOCK*THREADS_Y_PER_BLOCK;
 
 	constexpr int memsize=(blocksize<=64)?64:blocksize;
 	static __shared__ F sdata[memsize];
+	
+	
 	F partial_sum=0;
 	
 	int idy=blockIdx.y*blockDim.y+threadIdx.y;
 	int idx=blockIdx.x*2*blockDim.x+threadIdx.x;
 	int tx=threadIdx.x;
 	int ty=threadIdx.y;
+	int index=ty*blockDim.x+tx;
+	
+	sdata[index]=F(0.0); //initialize relevant part of the sdata array
 	//printf("alpha_inv: %f, beta: %f\n",alpha_inv,beta);
 
 	for (int fy=idy;fy<n;fy+=gridDim.y*blockDim.y){
@@ -84,29 +92,23 @@ void k_reduce_sum_of_squares_poisson_field_residual(F alpha_inv, F beta, int bou
 		
 		for (int fx=idx;fx<n;fx+=gridDim.x*2*blockDim.x){
 			//fx+=ws;
-			int index=ty*blockDim.x+tx;
-			
-			if (fx<n && fy<n){
-				F2 v=tex2D<F2>(A,fx+boundary_padding_thickness+0.5,fy+boundary_padding_thickness+0.5);
-				F2 vlower=tex2D<F2>(A,fx+boundary_padding_thickness+0.5,fy-1+boundary_padding_thickness+0.5);
-				F2 vupper=tex2D<F2>(A,fx+boundary_padding_thickness+0.5,fy+1+boundary_padding_thickness+0.5);
-				F2 vleft=tex2D<F2>(A,fx-1+boundary_padding_thickness+0.5,fy+boundary_padding_thickness+0.5);
-				F2 vright=tex2D<F2>(A,fx+1+boundary_padding_thickness+0.5,fy+boundary_padding_thickness+0.5);
-				
-				F2 b=tex2D<F2>(B,fx+boundary_padding_thickness+0.5,fy+boundary_padding_thickness+0.5);
-				
-				F2 diff;
-				diff.x=b.x-(beta*v.x-vleft.x-vright.x-vupper.x-vlower.x)*alpha_inv;
-				diff.y=b.y-(beta*v.y-vleft.y-vright.y-vupper.y-vlower.y)*alpha_inv;
-				sdata[index]=diff.x*diff.x+diff.y*diff.y;
 	
-				//printf("sdata[index]=%f, vs: %f %f %f %f %f blockids: %d , %d\n",diff.x,v.x,vlower.x,vupper.x,vleft.x,vright.x,fy,fx);
+			F2 v=tex2D<F2>(A,fx+boundary_padding_thickness+0.5,fy+boundary_padding_thickness+0.5);
+			F2 vlower=tex2D<F2>(A,fx+boundary_padding_thickness+0.5,fy-1+boundary_padding_thickness+0.5);
+			F2 vupper=tex2D<F2>(A,fx+boundary_padding_thickness+0.5,fy+1+boundary_padding_thickness+0.5);
+			F2 vleft=tex2D<F2>(A,fx-1+boundary_padding_thickness+0.5,fy+boundary_padding_thickness+0.5);
+			F2 vright=tex2D<F2>(A,fx+1+boundary_padding_thickness+0.5,fy+boundary_padding_thickness+0.5);
 			
-			}
-			else{
-				sdata[index]=F(0.0);
-			}
-						
+			F2 b=tex2D<F2>(B,fx+boundary_padding_thickness+0.5,fy+boundary_padding_thickness+0.5);
+			
+			F2 diff;
+			diff.x=b.x-(beta*v.x-vleft.x-vright.x-vupper.x-vlower.x)*alpha_inv;
+			diff.y=b.y-(beta*v.y-vleft.y-vright.y-vupper.y-vlower.y)*alpha_inv;
+			sdata[index]=diff.x*diff.x+diff.y*diff.y;
+			//printf("n:%d, vx:%f b.x:%f, u. %f %f %f %f diff:%f\n",n,v.y,b.y,vleft.y,vright.y,vlower.y,vupper.y,diff.x);
+			//printf("sdata[index]=%f, vs: %f %f %f %f %f blockids: %d , %d\n",diff.x,v.x,vlower.x,vupper.x,vleft.x,vright.x,fy,fx);
+			
+		
 			//printf("y,x: %d, %d , diffx:%f\n",fy,fx,diff.x);
 	
 			if ((fx+blockDim.x)<n && (fy)<n){
@@ -124,9 +126,6 @@ void k_reduce_sum_of_squares_poisson_field_residual(F alpha_inv, F beta, int bou
 		
 				//printf("sdata[index]=%f, vs: %f %f %f %f %f fy,fy: %d , %d\n",diff.x,v.x,vlower.x,vupper.x,vleft.x,vright.x,fy,fx+blockDim.x);
 				sdata[index]+=diff.x*diff.x+diff.y*diff.y; //TODO: Add second element
-			}
-			else{
-				sdata[index]+=F(0.0);
 			}
 			
 			__syncthreads();
@@ -176,57 +175,12 @@ void k_reduce_sum_of_squares_poisson_field_residual(F alpha_inv, F beta, int bou
 		}
 	}
 	if (tx==0 && ty==0){
-	//intf("Partial sum: %d %d %d\n",blockIdx.y*gridDim.x+blockIdx.x,tx,ty),;
-		r[(blockIdx.y*gridDim.x+blockIdx.x)*stride_r]=partial_sum;
+//	printf("Partial sum: %f\n",partial_sum);
+		r[(blockIdx.y*effective_gridDim_x+blockIdx.x)*stride_r]=partial_sum;
 	}
 
 }
 
-/*
-template<unsigned int THREADS_X_PER_BLOCK,unsigned int THREADS_Y_PER_BLOCK, class F, class F2>
-__global__
-void k_sum_of_squares_poisson_field_residual(F alpha_inv, F beta, int boundary_padding_thickness, int n, cudaTextureObject_t A,cudaTextureObject_t B, F* r, int stride_r){
-//printf("Durch\n");
-
-	if (n< (blockIdx.x*blockDim.x) || n<(blockIdx.y*blockDim.y)){
-		return;
-	}
-
-
-	int idy=blockIdx.y*blockDim.y+threadIdx.y;
-	int idx=blockIdx.x*blockDim.x+threadIdx.x;
-	int tx=threadIdx.x;
-	int ty=threadIdx.y;
-	//printf("alpha_inv: %f, beta: %f\n",alpha_inv,beta);
-
-	for (int hs=0;hs<n;hs+=gridDim.y*blockDim.y){
-		int fy=idy+hs;
-		int fx=idx;		
-		
-		for (int ws=0;ws<n;ws+=gridDim.x*2*blockDim.x){
-			fx+=ws;
-
-			if (fx<n && fy<n){
-				F2 v=tex2D<F2>(A,fx+boundary_padding_thickness+0.5,fy+boundary_padding_thickness+0.5);
-				F2 vlower=tex2D<F2>(A,fx+boundary_padding_thickness+0.5,fy-1+boundary_padding_thickness+0.5);
-				F2 vupper=tex2D<F2>(A,fx+boundary_padding_thickness+0.5,fy+1+boundary_padding_thickness+0.5);
-				F2 vleft=tex2D<F2>(A,fx-1+boundary_padding_thickness+0.5,fy+boundary_padding_thickness+0.5);
-				F2 vright=tex2D<F2>(A,fx+1+boundary_padding_thickness+0.5,fy+boundary_padding_thickness+0.5);
-				
-				F2 b=tex2D<F2>(B,fx+boundary_padding_thickness+0.5,fy+boundary_padding_thickness+0.5);
-				
-				F2 diff;
-				diff.x=b.x-(beta*v.x-vleft.x-vright.x-vupper.x-vlower.x)*alpha_inv;
-				diff.y=b.y-(beta*v.y-vleft.y-vright.y-vupper.y-vlower.y)*alpha_inv;
-	
-			//	r[(idy*gridDim.x*blockDim.x+blockIdx.x*blockDim.x+tx)*stride_r]=diff.x*diff.x+diff.y*diff.y;
-			
-			}
-		
-		}
-	}
-}
-*/
 
 /*Reduces an array with n elements to log_b(n) its size by summing its entries, whereas b is the number of blocks in the grid.*/
 template<unsigned int THREADS_X_PER_BLOCK, class F>
@@ -241,6 +195,7 @@ void k_reduce_sum(int n, F* r, int stride_r){
 	static __shared__ F sdata[memsize];
 	F* r_ptr=r;
 	int tx=threadIdx.x;
+	sdata[tx]=F(0.0);
 	F partial_sum=0.0;
 	for (int hs=0;hs<n;hs+=gridDim.x*2*blockDim.x){
 			r_ptr=r+hs;
@@ -409,7 +364,7 @@ void reduce_sum_of_squares_poisson_field_residual_device(F alpha, F beta, int bo
 	
 	dim3 blocks=dim3(blocks_x,blocks_y,1);
 	dim3 threads=dim3(threads_per_block_x,threads_per_block_y,1);
-	k_reduce_sum_of_squares_poisson_field_residual<threads_per_block_x,threads_per_block_y,F,F2><<<blocks,threads>>>(alpha_inv,beta,boundary_padding_thickness,n-2*boundary_padding_thickness, A_tex,B_tex, r_d,stride_r);
+	k_reduce_sum_of_squares_poisson_field_residual<threads_per_block_x,threads_per_block_y,F,F2><<<blocks,threads>>>(alpha_inv,beta,boundary_padding_thickness,n, A_tex,B_tex, r_d,stride_r);
 	
 	n=blocks_x*blocks_y;
 	
@@ -463,7 +418,7 @@ void reduce_sum_of_squares_poisson_field_residual_device(F alpha, F beta, int bo
 	
 	dim3 blocks=dim3(blocks_x,blocks_y,1);
 	dim3 threads=dim3(threads_per_block_x,threads_per_block_y,1);
-	k_reduce_sum_of_squares_poisson_field_residual<threads_per_block_x,threads_per_block_y,F,F2><<<blocks,threads>>>(alpha_inv,beta,boundary_padding_thickness,n-2*boundary_padding_thickness, A_tex,B_tex, r_d,stride_r);
+	k_reduce_sum_of_squares_poisson_field_residual<threads_per_block_x,threads_per_block_y,F,F2><<<blocks,threads>>>(alpha_inv,beta,boundary_padding_thickness,n, A_tex,B_tex, r_d,stride_r);
 	
 	n=blocks_x*blocks_y;
 	
@@ -474,3 +429,42 @@ __host__
 void reduce_sum_of_squares_poisson_field_residual_f32_device(float alpha, float beta, int boundary_padding_thickness, int n, float2* A_d,int pitch_a, float2* B_d, int pitch_b, float* r_d, int stride_r){
 	reduce_sum_of_squares_poisson_field_residual_device<float,float2>(alpha, beta, boundary_padding_thickness, n, A_d,pitch_a, B_d, pitch_b, r_d, stride_r);
 }
+
+template<class F2>
+__global__
+void k_restrict2h(int n, F2* dest, int pitch_dest, F2* src, int pitch_src){
+	int idy=blockIdx.y*blockDim.y+threadIdx.y;
+	int idx=blockIdx.x*blockDim.x+threadIdx.x;
+	
+	dest=(F2*) ((char*)dest+idy*pitch_dest);
+	src=(F2*) ((char*)src+2*idy*pitch_src);
+	
+	for(int i=idy;i<n;i+=gridDim.y*blockDim.y){
+		for(int j = idx; j<n; j+=gridDim.x*blockDim.x){
+
+			dest[j].x=src[2*j].x;
+			dest[j].y=src[2*j].y;													
+		}
+		dest=(F2*) ((char*)dest+pitch_dest);
+		src=(F2*) ((char*)src+2*pitch_src);	
+	}
+}
+
+template<class F2>
+__host__
+void restrict(int n, F2* dest, int pitch_dest, F2* src, int pitch_src){
+	int threads_per_block_x=8;	
+	int threads_per_block_y=4;	
+	int blocks_x=ceil(static_cast<float>(n)/(threads_per_block_x));
+	int blocks_y=ceil(static_cast<float>(n)/(threads_per_block_y));
+	
+	dim3 threads=dim3(threads_per_block_x,threads_per_block_y,1);
+	dim3 blocks=dim3(blocks_x,blocks_y,1);
+	k_restrict2h<F2><<<blocks,threads>>>(n,dest, pitch_dest, src,pitch_src);
+}
+
+template
+void restrict<float2>(int n, float2* dest, int pitch_dest, float2* src, int pitch_src);
+
+template
+void restrict<double2>(int n, double2* dest, int pitch_dest, double2* src, int pitch_src);

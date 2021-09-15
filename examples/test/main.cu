@@ -1,6 +1,6 @@
 #include <stdio.h>
-#include "../../../../src/gpu/cuda/solvers/poisson_multigrid.h"
-#include "utility.h"
+#include "../../src/gpu/cuda/solvers/poisson_multigrid.h"
+#include "../../diagnostics/correctness/gpu/cuda/utility.h"
 
 __global__
 void print_matrix_k(int m,int k, float* M, int stride_col,int stride_row,char name){
@@ -25,7 +25,7 @@ void print_vector_field_k(int m,int k, float2* M, int pitch,char name){
 	}	
 }
 
-bool test_mg_vc_poisson_2D_f32_zero_B(int n, int reps, char* error_message=nullptr){
+bool test(int n, int reps, char* error_message=nullptr){
 	for (int i=1;i<=reps;i++){	
 		n=i*n;
 		float2* U; //flow field vector
@@ -88,4 +88,10 @@ bool test_mg_vc_poisson_2D_f32_zero_B(int n, int reps, char* error_message=nullp
 			
 	}
 	return true;	
+}
+
+int main(){
+
+	test(5, 1);
+
 }
