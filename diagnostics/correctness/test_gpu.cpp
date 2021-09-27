@@ -1,7 +1,7 @@
 module;
 #include <ostream>
 
-#ifdef opt_use_cuda
+#ifdef use_cuda
 	#include "gpu/cuda/test_reductions.h"
 	#include "gpu/cuda/test_solvers.h"
 #endif
@@ -15,7 +15,7 @@ namespace desal{
 
 		namespace corr{		
 			
-			#ifdef opt_use_cuda
+			#ifdef use_cuda
 			//Tests of gaussnewton cpu
 			//CHANGE
 			export bool reduce_sum_f32_device_ascending(std::ostream& os, CorrectnessTest& v){

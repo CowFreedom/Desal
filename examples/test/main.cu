@@ -1,4 +1,7 @@
 #include <stdio.h>
+#include <iostream>
+#include<chrono>
+
 #include "../../src/gpu/cuda/solvers/poisson_multigrid.h"
 #include "../../diagnostics/correctness/gpu/cuda/utility.h"
 
@@ -58,28 +61,45 @@ bool test(int n, int reps, char* error_message=nullptr){
 		cudaMalloc((void**)&r,sizeof(float)*k*m);
 		cudaMemset(r,0.0,sizeof(float)*k*m);
 		
-		float2 u_val;
+		//float2 u_val;
 		float2 b_val;
 		b_val.x=0;
 		b_val.y=0;
-		u_val.x=1;
-		u_val.y=1;
+		//u_val.x=1;
+		//u_val.y=1;
 		//fill_array_uniformly2D<float2>(m,k,1,U,pitch_u,u_val);
-		fill_array_ascendingly2D_f32(m,k,1,U,pitch_u,0);
-		fill_array_uniformly2D<float2>(m,k,1,B,pitch_b,b_val);
+		desal::cuda::fill_array_ascendingly2D_f32(m,k,1,U,pitch_u,0);
+		desal::cuda::fill_array_uniformly2D<float2>(m,k,1,B,pitch_b,b_val);
 		
 		float exact_result=0;
-		print_vector_field_k<<<1,1>>>(m,k,U, pitch_u,'U');
-		mg_vc_poisson_2D_f32_device(alpha, gamma,eta, 1, n, B, pitch_b, U, pitch_u);
-
+	//	print_vector_field_k<<<1,1>>>(m,k,U, pitch_u,'U');
+	
+		// Get starting timepoint 
+		auto start = std::chrono::high_resolution_clock::now(); 
+		//Function to measure
+	
+		auto res=desal::cuda::mg_vc_poisson_2D_device<float, float2,std::ostream>(alpha, gamma,eta, 1, n, B, pitch_b, U, pitch_u,&std::cout);
+		// Get ending timepoint 
+		auto stop = std::chrono::high_resolution_clock::now(); 
+		 
+		auto duration = std::chrono::duration_cast<std::chrono::seconds>(stop - start); 
+	
+		std::cout<<"Test took "<<duration.count()<<"seconds\n";
+		if (res!=desal::cuda::DesalStatus::Success){
+			std::cout<<"Run finished unsuccessfully\n";
+		}
+		else{
+		std::cout<<"Run finished successfully\n";
+		}
+	
 			
 	//	reduce_sum_of_squares_poisson_field_residual_f32_device(alpha,beta,1, n,U,pitch_u, B, pitch_b, r);
 	//	
-		//print_vector_field_k<<<1,1>>>(m,k,B, pitch_b,'B');
+	//	print_vector_field_k<<<1,1>>>(m,k,B, pitch_b,'B');
 	//	print_matrix_k<<<1,1>>>(1,m*k, r, m,1,'r');		
 	//	printf("Result is:%f\n",exact_result);
 		
-		float gpu_result;
+		//float gpu_result;
 	//	cudaMemcpy(&gpu_result,r,sizeof(float)*1,cudaMemcpyDeviceToHost);
 		
 		cudaFree(r);
@@ -92,6 +112,8 @@ bool test(int n, int reps, char* error_message=nullptr){
 
 int main(){
 
-	test(5, 1);
+	//test(5001, 1);
+	test(8000, 1); //TODO: Test n=97
+	printf("Berechnung beendet\n");
 
 }
