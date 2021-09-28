@@ -18,8 +18,6 @@ namespace desal{
 
 			int idy=blockIdx.y*blockDim.y+threadIdx.y;
 			int idx=blockIdx.x*blockDim.x+threadIdx.x;
-			int tx=threadIdx.x;
-			int ty=threadIdx.y;
 			F2* r_ptr=(F2*) ((char*)r+(idy+boundary_padding_thickness)*pitch_r);
 			
 			for (int fy=idy;fy<m;fy+=gridDim.y*blockDim.y){	
@@ -45,7 +43,7 @@ namespace desal{
 
 		template<class F, class F2>
 		__host__
-		void transform_entries_into_residuals_device(F alpha, F beta, int boundary_padding_thickness, int m, int k, F2* A_d, int pitch_a, F2* B_d, int pitch_b, F2* r_d, int pitch_r){
+		cudaError_t transform_entries_into_residuals_device(F alpha, F beta, int boundary_padding_thickness, int m, int k, F2* A_d, int pitch_a, F2* B_d, int pitch_b, F2* r_d, int pitch_r){
 			F alpha_inv=1.0/alpha;
 			
 			//Create Resource descriptions
@@ -83,7 +81,7 @@ namespace desal{
 			cudaError_t error1=cudaCreateTextureObject(&A_tex, &resDescA, &texDesc, NULL);
 			cudaError_t error2=cudaCreateTextureObject(&B_tex, &resDescB, &texDesc, NULL);
 			if ((error1 !=cudaSuccess)&&(error2 !=cudaSuccess)){
-			//	printf("Errorcode: %d\n",error1);
+				return (error1!=cudaSuccess)?error1:error2;
 			}
 			
 			int threads_per_block_x=8;	
@@ -95,15 +93,12 @@ namespace desal{
 			dim3 blocks=dim3(blocks_x,blocks_y,1);
 			
 			k_transform_entries_into_residuals<F,F2><<<blocks,threads>>>(alpha_inv, beta, boundary_padding_thickness, m, k,A_tex,B_tex, r_d, pitch_r);	
-				
+			return cudaSuccess;
 		}
 
+		template
 		__host__
-		void transform_entries_into_residuals_f32_device(float alpha, float beta, int boundary_padding_thickness, int m, int k, float2* A_d, int pitch_a, float2* B_d, int pitch_b, float2* r_d, int pitch_r){
-
-			transform_entries_into_residuals_device<float,float2>(alpha, beta, boundary_padding_thickness, m, k, A_d, pitch_a, B_d, pitch_b, r_d, pitch_r);
-
-		}
+		cudaError_t transform_entries_into_residuals_device(float alpha, float beta, int boundary_padding_thickness, int m, int k, float2* A_d, int pitch_a, float2* B_d, int pitch_b, float2* r_d, int pitch_r);
 
 		//Prolongs source 2D array and adds it to destination
 		template<class F2>
@@ -146,7 +141,7 @@ namespace desal{
 		//Prolongs source 2D array and adds it to destination
 		template<class F2>
 		__host__
-		void prolong_by_interpolation_and_add_2h(int m, int k, F2* dest, int pitch_dest, F2* src, int pitch_src){
+		cudaError_t prolong_by_interpolation_and_add_2h(int m, int k, F2* dest, int pitch_dest, F2* src, int pitch_src){
 
 			//Create Resource descriptions
 			cudaResourceDesc resDesc;
@@ -170,12 +165,12 @@ namespace desal{
 
 			cudaTextureObject_t src_tex;
 			//printf("nOn: %d\n",n*n);
-			cudaError_t error1=cudaCreateTextureObject(&src_tex, &resDesc, &texDesc, NULL);
 			
-			if ((error1 !=cudaSuccess)){
-				printf("Errorcode prolongand add: %s\n",cudaGetErrorString(error1));
-				exit(1);
-			}	
+			cudaError_t err=cudaCreateTextureObject(&src_tex, &resDesc, &texDesc, NULL);
+			
+			if (err !=cudaSuccess){
+				return err;
+			}
 			int threads_per_block_x=8;	
 			int threads_per_block_y=4;	
 			int blocks_x=ceil(static_cast<float>(m)/(threads_per_block_x));
@@ -184,12 +179,13 @@ namespace desal{
 			dim3 threads=dim3(threads_per_block_x,threads_per_block_y,1);
 			dim3 blocks=dim3(blocks_x,blocks_y,1);
 			k_prolong_by_interpolation_and_add_2h<F2><<<blocks,threads>>>(m,k, dest, pitch_dest, src_tex);
+			return cudaSuccess;
 		}
 
 		//Prolongs source 2D array and adds it to destination
 		template<class F, class F2>
 		__host__
-		void prolong_by_interpolation_and_add(F h, int n_p, int n_r, F2* dest, int pitch_dest, F2* src, int pitch_src){
+		cudaError_t prolong_by_interpolation_and_add(F h, int n_p, int n_r, F2* dest, int pitch_dest, F2* src, int pitch_src){
 
 			//Create Resource descriptions
 			cudaResourceDesc resDesc;
@@ -212,11 +208,10 @@ namespace desal{
 			texDesc.addressMode[1] = cudaAddressModeBorder;
 
 			cudaTextureObject_t src_tex;
-			cudaError_t error1=cudaCreateTextureObject(&src_tex, &resDesc, &texDesc, NULL);
+			cudaError_t err=cudaCreateTextureObject(&src_tex, &resDesc, &texDesc, NULL);
 			
-			if ((error1 !=cudaSuccess)){
-				printf("Errorcode prolongand add: %s\n",cudaGetErrorString(error1));
-				exit(1);
+			if (err !=cudaSuccess){
+				return err;
 			}	
 			int threads_per_block_x=8;	
 			int threads_per_block_y=4;	
@@ -226,25 +221,26 @@ namespace desal{
 			dim3 threads=dim3(threads_per_block_x,threads_per_block_y,1);
 			dim3 blocks=dim3(blocks_x,blocks_y,1);
 			k_prolong_by_interpolation_and_add<F,F2><<<blocks,threads>>>(h,n_p, dest, pitch_dest, src_tex);
+			return cudaSuccess;
 		}
 
 		//template<class F2>
 		__host__
-		void prolong_and_add(int n_p,int n_r, float2* dest, int pitch_dest, float2* src, int pitch_src){
+		cudaError_t prolong_and_add(int n_p,int n_r, float2* dest, int pitch_dest, float2* src, int pitch_src){
 			using F2=float2;
 
 			if (((n_p)%2)!=0){
-				prolong_by_interpolation_and_add_2h<F2>(n_r, n_r, dest, pitch_dest,src,pitch_src);	
+				return prolong_by_interpolation_and_add_2h<F2>(n_r, n_r, dest, pitch_dest,src,pitch_src);	
 			}
 			else{
 				float h=static_cast<float>(n_r)/(n_p-1);
-				printf("Hier: %f  %d %d\n",h, n_r, n_p);
-				prolong_by_interpolation_and_add<float,F2>(h,n_p, n_r, dest, pitch_dest,src,pitch_src);	
+				//printf("Hier: %f  %d %d\n",h, n_r, n_p);
+				return prolong_by_interpolation_and_add<float,F2>(h,n_p, n_r, dest, pitch_dest,src,pitch_src);	
 			}
 			
 		}
 
 		__host__
-		void prolong_and_add(int n_p, int n_r, float2* dest, int pitch_dest, float2* src, int pitch_src);
+		cudaError_t prolong_and_add(int n_p, int n_r, float2* dest, int pitch_dest, float2* src, int pitch_src);
 	}
 }

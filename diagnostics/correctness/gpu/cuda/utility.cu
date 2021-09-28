@@ -100,14 +100,14 @@ namespace desal{
 			for (int i=0;i<n;i++){
 					
 					float2* vert=(float2*) ((char*)A+i*pitch);
-					
+			
 					if (A[i].x!=val ||down[i].x!=val){
-						printf("Horizontal boundary x error\n");
+						printf("Horizontal boundary x error with values %f and %f\n", A[i].x, down[i].x);
 				
 					}
 					
 					if (vert[0].x!=val || vert[(n-1)].x!=val){
-						printf("vertical boundary x error\n");
+						printf("vertical boundary x error with values %f and %f\n", vert[0].x, vert[(n-1)].x);
 					}
 					
 					

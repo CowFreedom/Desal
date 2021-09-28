@@ -113,7 +113,7 @@ bool test(int n, int reps, char* error_message=nullptr){
 int main(){
 
 	//test(5001, 1);
-	test(8000, 1); //TODO: Test n=97
+	test(9300, 1); //TODO: Test n=97
 	printf("Berechnung beendet\n");
 
 }

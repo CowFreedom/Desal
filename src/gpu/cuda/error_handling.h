@@ -9,6 +9,7 @@ namespace desal{
 		enum class DesalStatus{
 			Success,
 			CUDAError,
+			InvalidParameters,
 		};
 
 		template<class S>

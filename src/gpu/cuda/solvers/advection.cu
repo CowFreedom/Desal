@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include "../error_handling.h"
 
 //static cudaArray* tex_array;
 //m_q: Number of vertical interior grid points, k_q: Number of horizontal grid points
@@ -107,9 +108,9 @@ namespace desal{
 
 
 		__host__
-		void advection_2D_f32_device(float dt, float dy, float dx,  int m_q,  int k_q, float2* U_d, int pitch_u, float* Q_d, int pitch_q, float* C_d, int pitch_c){
+		DesalStatus advection_2D_f32_device(float dt, float dy, float dx,  int m_q,  int k_q, float2* U_d, int pitch_u, float* Q_d, int pitch_q, float* C_d, int pitch_c){
 			if ((m_q<3) || (k_q<3)){
-				return;
+				return DesalStatus::InvalidParameters;
 			}
 
 			//Create Resource description
@@ -139,12 +140,13 @@ namespace desal{
 			cudaTextureObject_t Q_tex;
 			cudaError_t error1=cudaCreateTextureObject(&Q_tex, &resDesc, &texDesc, NULL);
 			if (error1 !=cudaSuccess){
-				printf("Errorcode: %d\n",error1);
+				return DesalStatus::CUDAError;
 			}
 			printf("w, h: %d,%d\n",k_q,m_q);
 			float* C_ptr=(float*) ((char*)C_d+pitch_c)+1;
 			float2* U_ptr=(float2*) ((char*)U_d+pitch_u)+1;
 			k_advection_2D_f32<<<dim3(1,1,1),dim3(8,4,1)>>>(dt,dy,dy,m_q-2,k_q-2,U_ptr,pitch_u,Q_tex,C_ptr,pitch_c);
+			return DesalStatus::Success;
 		}
 	}
 }
