@@ -171,7 +171,7 @@ namespace desal{
 			if (err !=cudaSuccess){
 				return err;
 			}
-			int threads_per_block_x=8;	
+			int threads_per_block_x=256;	
 			int threads_per_block_y=4;	
 			int blocks_x=ceil(static_cast<float>(m)/(threads_per_block_x));
 			int blocks_y=ceil(static_cast<float>(k)/(threads_per_block_y));
@@ -213,7 +213,7 @@ namespace desal{
 			if (err !=cudaSuccess){
 				return err;
 			}	
-			int threads_per_block_x=8;	
+			int threads_per_block_x=256;	
 			int threads_per_block_y=4;	
 			int blocks_x=ceil(static_cast<float>(n_p)/(threads_per_block_x));
 			int blocks_y=ceil(static_cast<float>(n_p)/(threads_per_block_y));

@@ -331,8 +331,8 @@ namespace desal{
 			}
 			
 			F alpha_inv=1.0/alpha;
-			constexpr int threads_per_block_x=512;
-			constexpr int threads_per_block_y=2;
+			constexpr int threads_per_block_x=8;
+			constexpr int threads_per_block_y=4;
 			
 			//TODO: Check if both variables above are power of two and smaller than 1024
 				
@@ -383,7 +383,7 @@ namespace desal{
 			k_reduce_sum_of_squares_poisson_field_residual<threads_per_block_x,threads_per_block_y,F,F2><<<blocks,threads>>>(alpha_inv,beta,boundary_padding_thickness,n, A_tex,B_tex, r_d,stride_r);
 			
 			n=blocks_x*blocks_y;
-			
+		
 			reduce_sum_device<F>(n,r_d,stride_r);
 			
 			return cudaSuccess;
@@ -497,7 +497,7 @@ namespace desal{
 		template<class F, class F2>
 		__host__
 		cudaError_t restrict(int n, int n_r, F2* dest, int pitch_dest, F2* src, int pitch_src){
-			int threads_per_block_x=8;	
+			int threads_per_block_x=256;	
 			int threads_per_block_y=4;	
 			int blocks_x=ceil(static_cast<float>(n_r)/(threads_per_block_x));
 			int blocks_y=ceil(static_cast<float>(n_r)/(threads_per_block_y));

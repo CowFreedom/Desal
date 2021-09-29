@@ -32,7 +32,7 @@ namespace desal{
 					X_ptr[j+boundary_padding_thickness].x=(1.0-weight)*x.x+weight*beta_inv*(xlower.x+xupper.x+xleft.x+xright.x+alpha*b.x);	
 					X_ptr[j+boundary_padding_thickness].y=(1.0-weight)*x.y+weight*beta_inv*(xlower.y+xupper.y+xleft.y+xright.y+alpha*b.y);									
 				}
-				X_ptr=(float2*) ((char*)X_ptr+pitch_x);	 //check if i+1 is correct	
+				X_ptr=(float2*) ((char*)X_ptr+(gridDim.y*blockDim.y)*pitch_x);	 //check if i+1 is correct	
 			}
 		}
 		

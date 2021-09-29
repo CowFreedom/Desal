@@ -10,6 +10,7 @@ namespace desal{
 			Success,
 			CUDAError,
 			InvalidParameters,
+			MathError,
 		};
 
 		template<class S>
