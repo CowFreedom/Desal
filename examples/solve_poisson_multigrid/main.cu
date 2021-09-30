@@ -15,6 +15,7 @@
 
 void multigrid_example(int n, int reps){
 
+
 	for (int i=1;i<=reps;i++){	
 		float2* U; //flow field vector
 		float2* B; //flow field vector
@@ -90,7 +91,7 @@ void multigrid_example(int n, int reps){
 		else{
 			std::cout<<"The sum of squares error could not be successfully reduced below the set tolerance. Try more multigrid stages, more iterations per stage or a higher error tolerance\n\n";
 		}
-		
+
 		cudaFree(r);
 		cudaFree(U);
 	
@@ -105,7 +106,7 @@ int main(){
 	
 	std::cout<<"This device has "<<total_device_memory/(1000000000.0)<<" Gigabytes of GPU memory\n";
 	
-	multigrid_example(1000, 3); //TODO: Test n=97
+	multigrid_example(1000, 3);
 
 
 }

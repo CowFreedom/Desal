@@ -26,5 +26,12 @@ namespace desal{
 			
 		}	
 	}
+	
+	template<class T>
+		void deallocate_buffer_array(T** buf_arr, int n){
+			for (int i=0;i<n;i++){
+				cudaFree(buf_arr[i]);
+			}
+	}
 
 }

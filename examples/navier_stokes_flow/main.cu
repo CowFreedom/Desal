@@ -13,76 +13,48 @@
 #include "../../diagnostics/correctness/gpu/cuda/utility.h"
 
 
-void multigrid_example(int n, int reps){
+void multigrid_example(float height, float width, int m, int k){
 
-	for (int i=1;i<=reps;i++){	
-		float2* U; //flow field vector
-		float2* B; //flow field vector
-		float* r; // stores diffused velocity field
-		int width=n;
-		int height=n;
-		int k=n;
-		int m=n;
-		
 		//Problem parameters
+		float viscousity=1;
 		float dt=1;
 		float dx=width/k;
 		float dy=height/m;
-		
-		float v=1.0; //viscousity coefficient
-		float alpha=(dx*dy)/(v*dt); //see manual for details
-		float gamma=alpha; //see manual for details
-		float eta=4.0; //see manual for details
-		
-		//Allocate Device Memory
-		size_t pitch_u;
-		size_t pitch_b;
-			
-		cudaMallocPitch((void**)&U,&pitch_u,sizeof(float2)*k,m);
-		cudaMallocPitch((void**)&B,&pitch_b,sizeof(float2)*k,m);
-
-		cudaMemcpy2D(B,pitch_b,U,pitch_u,k*sizeof(float2),m,cudaMemcpyDeviceToDevice);
-		cudaMemset2D(B,pitch_b,0.0,(k-2)*sizeof(float2),m-2);	
-
-		cudaMalloc((void**)&r,sizeof(float)*k*m);
-		cudaMemset(r,0.0,sizeof(float)*k*m);
-		
-		//Create b and starting vector x0 in Ax0=b
-		//float2 u_val;
-		float2 b_val;
-		b_val.x=0;
-		b_val.y=0;
-		//u_val.x=1;
-		//u_val.y=1;
-		//fill_array_uniformly2D<float2>(m,k,1,U,pitch_u,u_val);
-		desal::cuda::fill_array_ascendingly2D_f32(m,k,1,U,pitch_u,0);
-		desal::cuda::fill_array_uniformly2D<float2>(m,k,1,B,pitch_b,b_val);
-		
-		
-		int multigrid_stages=i;
+		int multigrid_stages=1;
 		int max_jacobi_iterations_per_stage[]={30,30,30,30,30,30,30,30,30,30};//maximum number of iterations per multigrid stage
 		float jacobi_weight=1.0; //weight factor of the weighted Jacobi method
-		float tol=0.1; //if sum of squares of the residual goes below this value, the estimation of x in Ax=b terminates and returns DesalStatus::Success
+		float jacobi_tol=0.1; //if sum of squares of the residual goes below this value, the estimation of x in Ax=b terminates and returns DesalStatus::Success
 		float sos_residual; // this saves the sum of squares of the residual
 		
-		//The time taken to solve the linear system of equations is printed
-		// Get starting timepoint 
-		auto start = std::chrono::high_resolution_clock::now(); 
-		//Function to measure
-
-		std::cout<<std::setprecision(2)<<std::fixed;
-		auto res=desal::cuda::navier_stokes_2D_nobuf_device<float, float2,std::ostream>(alpha, gamma,eta, 1, n, B, pitch_b, U, pitch_u,max_jacobi_iterations_per_stage,multigrid_stages, jacobi_weight, tol, &sos_residual,&std::cout);
-		// Get ending timepoint 
-		auto stop = std::chrono::high_resolution_clock::now(); 
-		 
-		auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start); 
-	
 		
-		cudaFree(r);
-		cudaFree(U);
+
+		//Allocate Vectors
+		float2* U_old; //flow field vector
+		float2* U_new; //flow field vector buffer
 	
-			
-	}
+		size_t pitch_u_old;
+		size_t pitch_u_new;
+		
+		cudaMallocPitch((void**)&U_new,&pitch_u_new,sizeof(float2)*k,m);
+		cudaMallocPitch((void**)&U_old,&pitch_u_old,sizeof(float2)*k,m);	
+		
+		//Initialize grid
+		cudaMemset(U_old,0.0,sizeof(float2)*k*m);	
+		
+		float2 u_val;
+		
+		u_val.x=1;
+		u_val.y=2;
+
+		//desal::cuda::fill_array_ascendingly2D_f32(m,k,1,U,pitch_u,0);
+		desal::cuda::fill_array_uniformly2D<float2>(m,k,1,U_old,pitch_u_old,u_val);
+		
+		desal::cuda::navier_stokes_2D_device(dt, viscousity, 1, dy,dx,  m,k, U_old, pitch_u_old, U_new, pitch_u_new, max_jacobi_iterations_per_stage, multigrid_stages,jacobi_weight,  jacobi_tol, &std::cout);
+
+		
+
+	cudaFree(U_new);
+	cudaFree(U_old);
 }
 
 int main(){
@@ -91,8 +63,10 @@ int main(){
 	cudaMemGetInfo(&free_device_memory,&total_device_memory);
 	
 	std::cout<<"This device has "<<total_device_memory/(1000000000.0)<<" Gigabytes of GPU memory\n";
-	
-	multigrid_example(1000, 3); //TODO: Test n=97
-
-
+	int x_points=20;
+	int y_points=20;
+	float height=1.0;
+	float width=1.0;
+	multigrid_example(height,width,y_points,x_points); //TODO: Test n=97
+	std::cout<<"Berechnung beendet\n";
 }

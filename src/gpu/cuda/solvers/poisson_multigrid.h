@@ -294,18 +294,20 @@ namespace desal {
 		
 		template<class F, class F2, class S>
 		DesalStatus mg_vc_poisson_2D_device(F alpha, F gamma, F eta, int boundary_padding_thickness, int n, F2* B_d, int pitch_b, F2* C_d, int pitch_c, int* max_jacobi_iterations, int multigrid_stages, F jacobi_weight=1.0,F tol=0.1, F* sos_residual=nullptr, S* os=nullptr){
+			int m=n;
+			int k=n;
+			float v=3*(1<<(multigrid_stages-1));
 			
-			if (multigrid_stages<1 || tol<0 || multigrid_stages >20){
-				return DesalStatus::InvalidParameters;
-			}
-			
-			if (n*(1.0/(1<<(multigrid_stages-1)))<3){
-				if (os){
+			if (multigrid_stages<1 || tol<0 || multigrid_stages >20 || m<v || k<v){			
+				if(m>(3*v) || k>(3*v)){
 					(*os)<<"Too many multigrid stages for the input size\n";
 				}
 				return DesalStatus::InvalidParameters;
-				
 			}
+			
+			int k_buf=k;
+			int m_buf=m;			
+	
 			//double inv_power_of_two_lookup[]={1,1.0/2.0,1.0/4.0,1.0/8.0,1.0/16.0,1.0/32.0,1.0/64.0,1.0/128.0,1.0/256.0,1.0/512,1.0/1024,1.0/2048,1.0/4098,1.0/8196,1.0/16392,1.0/32784};
 			
 			//int n_buf=ceil((2.0-0.9*inv_power_of_two_lookup[multigrid_stages-1])*n); //TODO: Calculate required stage more tightly. The 0.9 multiplication is just there to allocate a little bit more than required for robustness concerning numerical errors in the expression
@@ -313,36 +315,31 @@ namespace desal {
 		//	printf("Result:%d\n",n_buf);
 		
 			int n_buf=n;
-			int sum=n*n;
-			int sum2=n;
 			F2* C_buf[20];
 			F2* r_buf[20];
 			size_t pitch_c_buf[20];
 			size_t pitch_r_buf[20];
-			cudaError_t err=cudaMallocPitch((void**)&C_buf[0],&pitch_c_buf[0],n*sizeof(F2),n);
 			
-			if (err != cudaSuccess){
-				return DesalStatus::CUDAError;
-			}
-			err=gpuErrorCheck(cudaMallocPitch((void**)&r_buf[0],&pitch_r_buf[0],n*sizeof(F2),n),os);
+			cudaError_t err1,err2,err3,err4;	
 			
-			
-			gpuErrorCheck(cudaMemset2D(C_buf[0],pitch_c_buf[0],0.0,n*sizeof(F2),n),os);
-			gpuErrorCheck(cudaMemset2D(r_buf[0],pitch_r_buf[0],0.0,n*sizeof(F2),n),os);
+			for (int i=0; i<multigrid_stages;i++){
+				err1=cudaMallocPitch((void**)(&C_buf[i]),&pitch_c_buf[i],k_buf*sizeof(F2),m_buf);
 				
-			for (int i=1; i<multigrid_stages;i++){
-				n_buf=restrict_n(n_buf);
-				sum+=n_buf*n_buf;
-				sum2+=n_buf;
-				gpuErrorCheck(cudaMallocPitch((void**)(&C_buf[i]),&pitch_c_buf[i],n_buf*sizeof(F2),n_buf),os);
-				gpuErrorCheck(cudaMemset2D(C_buf[i],pitch_c_buf[i],0.0,n_buf*sizeof(F2),n_buf),os);
-				gpuErrorCheck(cudaMallocPitch((void**)&r_buf[i],&pitch_r_buf[i],n_buf*sizeof(F2),n_buf),os);
-				gpuErrorCheck(cudaMemset2D(r_buf[i],pitch_r_buf[i],0.0,n_buf*sizeof(F2),n_buf),os);
-			}
+				err2=gpuErrorCheck(cudaMallocPitch((void**)&r_buf[i],&pitch_r_buf[i],k_buf*sizeof(F2),m_buf),os);
+
+				err3=gpuErrorCheck(cudaMemset2D(C_buf[i],pitch_c_buf[i],0.0,k_buf*sizeof(F2),m_buf),os);
+				err4=gpuErrorCheck(cudaMemset2D(r_buf[i],pitch_r_buf[i],0.0,k_buf*sizeof(F2),m_buf),os);
+				
+				if ((err1 != cudaSuccess)&&(err2 != cudaSuccess)&&(err3 != cudaSuccess)&&(err4 != cudaSuccess)){
+					deallocate_buffer_array(C_buf,i);
+					deallocate_buffer_array(r_buf,i);
+					return DesalStatus::CUDAError;
+				}
+				
+				m_buf=restrict_n(m_buf);
+				k_buf=restrict_n(k_buf);
+			}		
 			
-			if (n_buf<3){
-				return DesalStatus::InvalidParameters;
-			}
 
 			F* sos_residual_d;
 			F sos_residual_h=-1;
@@ -353,24 +350,27 @@ namespace desal {
 			int blocks_y=ceil(static_cast<F>(n)/(2*threads_per_block_y));
 			size_t size_e=blocks_x*blocks_y*sizeof(F);
 			cudaMalloc((void**) &sos_residual_d,size_e);
-			err=gpuErrorCheck(cudaMemset(sos_residual_d,0,size_e),os);
+			cudaError_t err=gpuErrorCheck(cudaMemset(sos_residual_d,0,size_e),os);
 				
 			if (err != cudaSuccess){
+				deallocate_buffer_array(C_buf,multigrid_stages);
+				deallocate_buffer_array(r_buf,multigrid_stages);
 				return DesalStatus::CUDAError;
 			}
 
 
 			DesalStatus res= mg_vc_poisson_2D_nobuf_device<F,F2,S>(alpha, gamma,eta, boundary_padding_thickness, n, B_d, pitch_b, C_d, pitch_c, C_buf, pitch_c_buf, r_buf, pitch_r_buf, max_jacobi_iterations,multigrid_stages, jacobi_weight,tol,sos_residual_d, &sos_residual_h, os);
 			//DesalStatus res=DesalStatus::Success;
-			for (int i=0;i<multigrid_stages;i++){
-				cudaFree(C_buf[i]);
-				cudaFree(r_buf[i]);
-			}
+			deallocate_buffer_array(C_buf,multigrid_stages);
+			deallocate_buffer_array(r_buf,multigrid_stages);
+			
 			cudaFree(sos_residual_d);
 			if (sos_residual){
 				*sos_residual=sos_residual_h;
 			}
+			cudaFree(sos_residual_d);
 			return res;
+		
 		
 		}
 	
