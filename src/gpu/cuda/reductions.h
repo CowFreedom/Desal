@@ -5,11 +5,11 @@ namespace desal{
 		
 		template<class F, class F2>
 		__host__
-		cudaError_t reduce_sum_of_squares_poisson_field_residual_device(F alpha, F beta, int boundary_padding_thickness, int n, F2* A_d,int pitch_a, cudaTextureObject_t B_tex, F* r_d, int stride_r);
+		cudaError_t reduce_sum_of_squares_poisson_field_residual_device(F alpha, F beta, int boundary_padding_thickness, int m, int k, F2* A_d,int pitch_a, cudaTextureObject_t B_tex, F* r_d, int stride_r);
 
 		template<class F, class F2>
 		__host__
-		cudaError_t reduce_sum_of_squares_poisson_field_residual_device(F alpha, F beta, int boundary_padding_thickness, int n, F2* A_d,int pitch_a, F2* B_d, int pitch_b, F* r_d, int stride_r);
+		cudaError_t reduce_sum_of_squares_poisson_field_residual_device(F alpha, F beta, int boundary_padding_thickness, int m, int k, F2* A_d,int pitch_a, F2* B_d, int pitch_b, F* r_d, int stride_r);
 
 		template<class F>
 		__host__
@@ -34,6 +34,6 @@ namespace desal{
 		}
 
 		template<class F, class F2>
-		cudaError_t restrict(int n, int n_res, F2* dest, int pitch_dest, F2* src, int pitch_src);
+		cudaError_t restrict(int m, int k, int m_r, int k_r, F2* dest, int pitch_dest, F2* src, int pitch_src);
 	}
 }

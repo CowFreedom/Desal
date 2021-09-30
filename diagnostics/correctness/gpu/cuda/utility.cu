@@ -69,18 +69,21 @@ namespace desal{
 
 		template<class F2>
 		__global__
-		void k_fill_array_ascendingly2D_field(int m,int k,int boundary_padding_thickness, F2* U,int pitch_u, int offset=0){
+		void k_fill_array_ascendingly2D_field(int m,int k,int boundary_padding_thickness, F2* U,int pitch_u, int offset=1){
+			m-=2*boundary_padding_thickness;
+			k-=2*boundary_padding_thickness;
 			U=(F2*)((char*)U+boundary_padding_thickness*pitch_u);;
-			for (int i=blockIdx.y*blockDim.y+threadIdx.y;i<(m-2*boundary_padding_thickness);i+=gridDim.y*blockDim.y){
+			for (int i=blockIdx.y*blockDim.y+threadIdx.y;i<m;i+=gridDim.y*blockDim.y){
 				F2* temp=(F2*)((char*)U+i*pitch_u);
-				for (int j=blockIdx.x*blockDim.x+threadIdx.x+boundary_padding_thickness;j<(k-boundary_padding_thickness);j+=gridDim.y*blockDim.x){
+				for (int j=blockIdx.x*blockDim.x+threadIdx.x+boundary_padding_thickness;j<k;j+=gridDim.y*blockDim.x){
 					F2 val;
-					val.x=i*(k-2*boundary_padding_thickness)+j+1+offset-boundary_padding_thickness;
-					val.y=i*(k-2*boundary_padding_thickness)+j+1+offset-boundary_padding_thickness;
-					temp[j]=val;
+					val.x=i*k+j+offset;
+					val.y=i*k+j+offset;
+					temp[j+boundary_padding_thickness]=val;
 				}
 			}
 		}
+		
 
 		__host__
 		void fill_array_ascendingly2D_f32(int m, int k, int boundary_padding_thickness, float2* U, int pitch_u, int offset=0){
@@ -91,6 +94,7 @@ namespace desal{
 
 			k_fill_array_ascendingly2D_field<float2><<<blocks,threads>>>(m,k,boundary_padding_thickness,U,pitch_u,offset);	
 		}
+
 
 		__global__
 		void k_check_boundary(int n,float2* A, int pitch,float val){

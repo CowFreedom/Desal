@@ -11,17 +11,17 @@ namespace desal{
 		//m: height of interior points k: width of interior plus boundary points
 		template<class F, class F2>
 		__global__
-		void k_jacobi_poisson_2D(F weight, F alpha, F beta_inv, int boundary_padding_thickness, int n, cudaTextureObject_t X_old, F2* X_new, int pitch_x, cudaTextureObject_t B){
-
-			n-=2*boundary_padding_thickness;
+		void k_jacobi_poisson_2D(F weight, F alpha, F beta_inv, int boundary_padding_thickness, int m, int k, cudaTextureObject_t X_old, F2* X_new, int pitch_x, cudaTextureObject_t B){
+			m-=2*boundary_padding_thickness;
+			k-=2*boundary_padding_thickness;
 			int idy=blockIdx.y*blockDim.y+threadIdx.y;
 			int idx=blockIdx.x*blockDim.x+threadIdx.x;
 			
 			float2* X_ptr=X_ptr=(float2*) ((char*)X_new+(idy+boundary_padding_thickness)*pitch_x);	
 
-			for(int i=idy;i<n;i+=gridDim.y*blockDim.y){
+			for(int i=idy;i<m;i+=gridDim.y*blockDim.y){
 					
-				for(int j = idx; j<n; j+=gridDim.x*blockDim.x){
+				for(int j = idx; j<k; j+=gridDim.x*blockDim.x){
 					float2 x=tex2D<float2>(X_old,j+boundary_padding_thickness+0.5,i+boundary_padding_thickness+0.5);
 					float2 xupper=tex2D<float2>(X_old,j+boundary_padding_thickness+0.5,i+1+boundary_padding_thickness+0.5);
 					float2 xlower=tex2D<float2>(X_old,j+boundary_padding_thickness+0.5,i-1+boundary_padding_thickness+0.5);
@@ -38,7 +38,7 @@ namespace desal{
 		
 		template
 		__global__
-		void k_jacobi_poisson_2D(float weight, float alpha, float beta_inv, int boundary_padding_thickness, int n, cudaTextureObject_t X_old, float2* X_new, int pitch_x, cudaTextureObject_t B);
+		void k_jacobi_poisson_2D(float weight, float alpha, float beta_inv, int boundary_padding_thickness, int m, int k, cudaTextureObject_t X_old, float2* X_new, int pitch_x, cudaTextureObject_t B);
 
 		__global__
 		void print_vector_field_k2(int m,int k, float2* M, int pitch,char name, int iteration){

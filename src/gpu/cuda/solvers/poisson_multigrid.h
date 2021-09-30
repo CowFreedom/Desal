@@ -14,7 +14,7 @@ namespace desal {
 	
 		template<class F, class F2>
 		__global__
-		void k_jacobi_poisson_2D(F weight, F alpha, F beta_inv, int boundary_padding_thickness, int n, cudaTextureObject_t X_old, F2* X_new, int pitch_x, cudaTextureObject_t B);
+		void k_jacobi_poisson_2D(F weight, F alpha, F beta_inv, int boundary_padding_thickness, int m, int k, cudaTextureObject_t X_old, F2* X_new, int pitch_x, cudaTextureObject_t B);
 
 		__global__
 		void print_vector_field_k2(int m,int k, float2* M, int pitch,char name, int iteration=0);
@@ -22,11 +22,11 @@ namespace desal {
 		//Solves AX=B
 		template<class F, class F2, class S>
 		__host__
-		DesalStatus jacobi_poisson_2D_device(F alpha, F beta, int boundary_padding_thickness, int n, F2* X, int pitch_x, F2* X_buf, int pitch_x_buf, float2* B_d, int pitch_b,int max_jacobi_iterations, F jacobi_weight, F tol, F* sos_residual_d, F* sos_residual_h, S* os=nullptr){
+		DesalStatus jacobi_poisson_2D_device(F alpha, F beta, int boundary_padding_thickness, int m, int k, F2* X, int pitch_x, F2* X_buf, int pitch_x_buf, float2* B_d, int pitch_b,int max_jacobi_iterations, F jacobi_weight, F tol, F* sos_residual_d, F* sos_residual_h, S* os=nullptr){
 
 			//If error is already below threshold, we can quit immediately
 			F sos_residual_h_prev;
-			reduce_sum_of_squares_poisson_field_residual_device<F,F2>(alpha,beta,boundary_padding_thickness, n,X,pitch_x, B_d, pitch_b, sos_residual_d, 1);	
+			reduce_sum_of_squares_poisson_field_residual_device<F,F2>(alpha,beta,boundary_padding_thickness, m,k,X,pitch_x, B_d, pitch_b, sos_residual_d, 1);	
 //print_vector_field_k2<<<1,1>>>(n,n,X,pitch_x,'O');				
 			cudaMemcpy(&sos_residual_h_prev,sos_residual_d,sizeof(F)*1,cudaMemcpyDeviceToHost);
 
@@ -46,8 +46,8 @@ namespace desal {
 			memset(&resDescB,0,sizeof(resDescB));
 			resDescB.resType = cudaResourceTypePitch2D;
 			resDescB.res.pitch2D.devPtr=B_d;
-			resDescB.res.pitch2D.width=n;
-			resDescB.res.pitch2D.height=n;
+			resDescB.res.pitch2D.width=k;
+			resDescB.res.pitch2D.height=m;
 			resDescB.res.pitch2D.pitchInBytes=pitch_b;
 			resDescB.res.pitch2D.desc=cudaCreateChannelDesc<F2>(); 
 		
@@ -56,8 +56,8 @@ namespace desal {
 			resDescX_buf.resType = cudaResourceTypePitch2D;
 			resDescX_buf.res.pitch2D.devPtr=X_buf;
 			resDescX_buf.res.pitch2D.pitchInBytes=pitch_x_buf;
-			resDescX_buf.res.pitch2D.width=n;
-			resDescX_buf.res.pitch2D.height=n;
+			resDescX_buf.res.pitch2D.width=k;
+			resDescX_buf.res.pitch2D.height=m;
 			resDescX_buf.res.pitch2D.desc=cudaCreateChannelDesc<F2>(); //cudaCreateChannelDesc(32,32,0,0,cudaChannelFormatKindFloat) is equivalent cudaCreateChannelDesc<float2>()
 
 			cudaResourceDesc resDescX;
@@ -65,8 +65,8 @@ namespace desal {
 			resDescX.resType = cudaResourceTypePitch2D;
 			resDescX.res.pitch2D.devPtr=X;
 			resDescX.res.pitch2D.pitchInBytes=pitch_x;
-			resDescX.res.pitch2D.width=n;
-			resDescX.res.pitch2D.height=n;
+			resDescX.res.pitch2D.width=k;
+			resDescX.res.pitch2D.height=m;
 			resDescX.res.pitch2D.desc=cudaCreateChannelDesc<F2>(); //cudaCreateChannelDesc(32,32,0,0,cudaChannelFormatKindFloat) is equivalent cudaCreateChannelDesc<float2>()
 
 
@@ -102,8 +102,8 @@ namespace desal {
 
 			int threads_per_block_x=512;	
 			int threads_per_block_y=2;	
-			int blocks_x=ceil(static_cast<float>(n)/(threads_per_block_x));
-			int blocks_y=ceil(static_cast<float>(n)/(threads_per_block_y));
+			int blocks_x=ceil(static_cast<float>(k)/(threads_per_block_x));
+			int blocks_y=ceil(static_cast<float>(m)/(threads_per_block_y));
 			F early_termination_tol=0.99;
 			dim3 threads=dim3(threads_per_block_x,threads_per_block_y,1);
 			dim3 blocks=dim3(blocks_x,blocks_y,1);
@@ -114,14 +114,13 @@ namespace desal {
 				
 			for (int i=0;i<iteration_blocks;i++){
 			
-				k_jacobi_poisson_2D<F,F2><<<blocks,threads>>>(jacobi_weight,alpha,beta_inv,boundary_padding_thickness,n,X_tex,X_buf,pitch_x_buf,B_tex);	
+				k_jacobi_poisson_2D<F,F2><<<blocks,threads>>>(jacobi_weight,alpha,beta_inv,boundary_padding_thickness,m,k,X_tex,X_buf,pitch_x_buf,B_tex);	
 //
-				reduce_sum_of_squares_poisson_field_residual_device<F,F2>(alpha,beta,boundary_padding_thickness, n,X_buf,pitch_x_buf, B_d, pitch_b, sos_residual_d, 1);	
+				reduce_sum_of_squares_poisson_field_residual_device<F,F2>(alpha,beta,boundary_padding_thickness, m,k,X_buf,pitch_x_buf, B_d, pitch_b, sos_residual_d, 1);	
 				
 				cudaMemcpy(sos_residual_h,sos_residual_d,sizeof(F)*1,cudaMemcpyDeviceToHost);		
 				if (os){
 					(*os)<<"Jacobi: Iteration: "<< 2*i+1<<" f_0: "<< *sos_residual_h <<"\n";
-		
 				}
 				
 				//print_vector_field_k2<<<1,1>>>(n,n,X_buf,pitch_x_buf,'O');
@@ -135,9 +134,7 @@ namespace desal {
 					}
 					return DesalStatus::MathError;
 				}
-				
-
-				k_jacobi_poisson_2D<F,F2><<<blocks,threads>>>(jacobi_weight,alpha,beta_inv,boundary_padding_thickness,n,X_buf_tex,X,pitch_x,B_tex);			
+				k_jacobi_poisson_2D<F,F2><<<blocks,threads>>>(jacobi_weight,alpha,beta_inv,boundary_padding_thickness,m,k,X_buf_tex,X,pitch_x,B_tex);			
 				sos_residual_h_prev=*sos_residual_h;
 			}
 			//TODO: No need to always keep both buffers synchronized
@@ -146,15 +143,15 @@ namespace desal {
 			}
 			else{
 			
-				k_jacobi_poisson_2D<F,F2><<<blocks,threads>>>(jacobi_weight,alpha,beta_inv,boundary_padding_thickness,n,X_tex,X_buf,pitch_x_buf,B_tex);		
-				err=gpuErrorCheck(cudaMemcpy2D(X,pitch_x,X_buf,pitch_x_buf,n*sizeof(F2),n,cudaMemcpyDeviceToDevice),os);
+				k_jacobi_poisson_2D<F,F2><<<blocks,threads>>>(jacobi_weight,alpha,beta_inv,boundary_padding_thickness,m,k,X_tex,X_buf,pitch_x_buf,B_tex);		
+				err=gpuErrorCheck(cudaMemcpy2D(X,pitch_x,X_buf,pitch_x_buf,k*sizeof(F2),m,cudaMemcpyDeviceToDevice),os);
 				
 				if (err != cudaSuccess){
 					return DesalStatus::CUDAError;
 				}
 				
 			}
-			reduce_sum_of_squares_poisson_field_residual_device<F,F2>(alpha,beta,boundary_padding_thickness, n,X,pitch_x, B_d, pitch_b, sos_residual_d, 1);	
+			reduce_sum_of_squares_poisson_field_residual_device<F,F2>(alpha,beta,boundary_padding_thickness, m,k,X,pitch_x, B_d, pitch_b, sos_residual_d, 1);	
 			cudaMemcpy(sos_residual_h,sos_residual_d,sizeof(F)*1,cudaMemcpyDeviceToHost);
 			
 			if (os){				
@@ -172,22 +169,26 @@ namespace desal {
 		//AC=B
 		template<class F, class F2, class S>
 		__host__
-		DesalStatus mg_vc_poisson_2D_nobuf_device(F alpha, F gamma, F eta, int boundary_padding_thickness, int n, F2* B_d, int pitch_b, F2* C_d, int pitch_c, F2** C_buf, size_t* pitch_c_buf, F2** r_buf, size_t* pitch_r_buf, int* max_jacobi_iterations, int multigrid_stages, F jacobi_weight, F tol , F* sos_residual_d, F* sos_residual_h, S* os=nullptr){			
+		DesalStatus mg_vc_poisson_2D_nobuf_device(F alpha, F gamma, F eta, int boundary_padding_thickness, int m,int k, F2* B_d, int pitch_b, F2* C_d, int pitch_c, F2** C_buf, size_t* pitch_c_buf, F2** r_buf, size_t* pitch_r_buf, int* max_jacobi_iterations, int multigrid_stages, F jacobi_weight, F tol , F* sos_residual_d, F* sos_residual_h, S* os=nullptr){			
 			F beta=gamma+eta;	
-		
+			
 			if (os){				
 					(*os)<<"V-Cycle: Stage 1\n";
 			}
 //print_vector_field_k2<<<1,1>>>(n,n,C_d,pitch_c,'O',2);			
-			DesalStatus jacobi_status=jacobi_poisson_2D_device<F,F2,S>(alpha,beta,boundary_padding_thickness,n, C_d,pitch_c,C_buf[0],pitch_c_buf[0], B_d,pitch_b,max_jacobi_iterations[0],jacobi_weight,tol, sos_residual_d, sos_residual_h,os);
+			DesalStatus jacobi_status=jacobi_poisson_2D_device<F,F2,S>(alpha,beta,boundary_padding_thickness,m,k, C_d,pitch_c,C_buf[0],pitch_c_buf[0], B_d,pitch_b,max_jacobi_iterations[0],jacobi_weight,tol, sos_residual_d, sos_residual_h,os);
 			if (jacobi_status==DesalStatus::Success){
 				return jacobi_status;
 			}
-			transform_entries_into_residuals_device<F,F2>(alpha,beta, boundary_padding_thickness, n,n, C_buf[0], pitch_c_buf[0], B_d, pitch_b, r_buf[0], pitch_r_buf[0]); //TODO C_buf should be equal to C at this stage
+			transform_entries_into_residuals_device<F,F2>(alpha,beta, boundary_padding_thickness, m,k, C_buf[0], pitch_c_buf[0], B_d, pitch_b, r_buf[0], pitch_r_buf[0]); //TODO C_buf should be equal to C at this stage
 	
-			int ns[20];
-			ns[0]=n;
-			ns[1]=restrict_n(n);
+			int m_buf[20];
+			int k_buf[20];
+			m_buf[0]=m;
+			m_buf[1]=restrict_n(m);
+			k_buf[0]=k;
+			k_buf[1]=restrict_n(k);
+		
 			F2* r_buf_prev=r_buf[0];
 			F alpha_curr=alpha;
 			F beta_curr;
@@ -198,7 +199,7 @@ namespace desal {
 		
 			/*Synchronize Buffer C_buf to contain the same values as C_d*/
 			if ((max_jacobi_iterations[0]%2) == 0){
-				cudaError_t err=gpuErrorCheck(cudaMemcpy2D(C_buf[0],pitch_c_buf[0],C_d,pitch_c,n*sizeof(float2),n,cudaMemcpyDeviceToDevice),os);
+				cudaError_t err=gpuErrorCheck(cudaMemcpy2D(C_buf[0],pitch_c_buf[0],C_d,pitch_c,k*sizeof(float2),m,cudaMemcpyDeviceToDevice),os);
 				if (err != cudaSuccess){
 					return DesalStatus::CUDAError;
 				}
@@ -209,7 +210,7 @@ namespace desal {
 					(*os)<<"V-Cycle Down: Stage "<< stage+1<<"\n";
 				}	
 				//Restrict previous residuals
-				restrict<F,F2>(ns[stage-1],ns[stage], r_buf_curr, pitch_r_buf[stage], r_buf_prev, pitch_r_buf[stage-1]);
+				restrict<F,F2>(m_buf[stage-1],k_buf[stage-1], m_buf[stage], k_buf[stage], r_buf_curr, pitch_r_buf[stage], r_buf_prev, pitch_r_buf[stage-1]);
 
 				//print_vector_field_k2<<<1,1>>>(ns[stage],ns[stage], r_buf[stage], pitch_r_buf[stage],'L');
 				//cudaDeviceSynchronize();
@@ -219,21 +220,22 @@ namespace desal {
 				gamma_curr=0.25*gamma;
 				beta_curr=gamma_curr+eta;
 				
-				cudaError_t err=gpuErrorCheck(cudaMemcpy2D(C_d,pitch_c,C_buf_curr,pitch_c_buf[stage],ns[stage]*sizeof(float2),ns[stage],cudaMemcpyDeviceToDevice),os);
+				cudaError_t err=gpuErrorCheck(cudaMemcpy2D(C_d,pitch_c,C_buf_curr,pitch_c_buf[stage],k_buf[stage]*sizeof(float2),m_buf[stage],cudaMemcpyDeviceToDevice),os);
 				if (err!=cudaSuccess){
 					return DesalStatus::CUDAError;
 				}
 
-				jacobi_status=jacobi_poisson_2D_device<F,F2,S>(alpha_curr,beta_curr,boundary_padding_thickness,ns[stage], C_buf_curr,pitch_c_buf[stage],C_d,pitch_c, r_buf_curr,pitch_r_buf[stage],max_jacobi_iterations[stage],jacobi_weight,tol,sos_residual_d, sos_residual_h,os);
+				jacobi_status=jacobi_poisson_2D_device<F,F2,S>(alpha_curr,beta_curr,boundary_padding_thickness,m_buf[stage],k_buf[stage], C_buf_curr,pitch_c_buf[stage],C_d,pitch_c, r_buf_curr,pitch_r_buf[stage],max_jacobi_iterations[stage],jacobi_weight,tol,sos_residual_d, sos_residual_h,os);
 
 				if (stage<(multigrid_stages-1)){
-					transform_entries_into_residuals_device<F,F2>(alpha_curr,beta_curr, boundary_padding_thickness, ns[stage],ns[stage], C_buf_curr, pitch_c_buf[stage], r_buf_curr, pitch_r_buf[stage], r_buf[0], pitch_r_buf[0]); //TODO C_buf should be equal to C at this stage
+					transform_entries_into_residuals_device<F,F2>(alpha_curr,beta_curr, boundary_padding_thickness, m_buf[stage],k_buf[stage], C_buf_curr, pitch_c_buf[stage], r_buf_curr, pitch_r_buf[stage], r_buf[0], pitch_r_buf[0]); //TODO C_buf should be equal to C at this stage
 
 					//Iterate pointers
 					r_buf_prev=r_buf_curr;
 					C_buf_curr=C_buf[stage+1];
 					r_buf_curr=r_buf[stage+1];
-					ns[stage+1]=restrict_n(ns[stage]);//(ns-1)*0.5+1; //there are ns-1 spaces between nodes
+					m_buf[stage+1]=restrict_n(m_buf[stage]);//(ns-1)*0.5+1; //there are ns-1 spaces between nodes
+					k_buf[stage+1]=restrict_n(k_buf[stage]);//(ns-1)*0.5+1; //there are ns-1 spaces between nodes
 				}
 				
 			}
@@ -251,11 +253,11 @@ namespace desal {
 
 				//prolongate and correct previous result
 				
-				prolong_and_add(ns[stage-2],ns[stage-1],C_buf_next,pitch_c_buf[stage-2],C_buf_curr,pitch_c_buf[stage-1]);
+				prolong_and_add(m_buf[stage-2], k_buf[stage-2], m_buf[stage-1], k_buf[stage-1], C_buf_next,pitch_c_buf[stage-2],C_buf_curr,pitch_c_buf[stage-1]);
 
 				//k_check_boundary<<<1,1>>>(ns[stage-2],r_buf_next, pitch_r_buf[stage-2],0.0);
 				//relax again
-				cudaError_t err=gpuErrorCheck(cudaMemcpy2D(C_d,pitch_c,C_buf_next,pitch_c_buf[stage-2],ns[stage-2]*sizeof(float2),ns[stage-2],cudaMemcpyDeviceToDevice),os);
+				cudaError_t err=gpuErrorCheck(cudaMemcpy2D(C_d,pitch_c,C_buf_next,pitch_c_buf[stage-2],k_buf[stage-2]*sizeof(float2),m_buf[stage-2],cudaMemcpyDeviceToDevice),os);
 				
 				if (err!=cudaSuccess){
 					return DesalStatus::CUDAError;
@@ -263,17 +265,15 @@ namespace desal {
 				
 				if (stage>2){
 					r_buf_curr=r_buf[stage-2];
-					jacobi_status=jacobi_poisson_2D_device<F,F2,S>(alpha_curr,beta_curr,boundary_padding_thickness,ns[stage-2], C_buf_next,pitch_c_buf[stage-2],C_d,pitch_c,r_buf_curr,pitch_r_buf[stage-2],max_jacobi_iterations[stage-2],jacobi_weight,tol,sos_residual_d,sos_residual_h, os);
-
-					
+					jacobi_status=jacobi_poisson_2D_device<F,F2,S>(alpha_curr,beta_curr,boundary_padding_thickness,m_buf[stage-2], k_buf[stage-2], C_buf_next,pitch_c_buf[stage-2],C_d,pitch_c,r_buf_curr,pitch_r_buf[stage-2],max_jacobi_iterations[stage-2],jacobi_weight,tol,sos_residual_d,sos_residual_h, os);				
 					C_buf_curr=C_buf_next;
 				}
 				else{
-					jacobi_status=jacobi_poisson_2D_device<F,F2,S>(alpha_curr,beta_curr,boundary_padding_thickness,n, C_buf_next,pitch_c_buf[stage-2],C_d,pitch_c,B_d,pitch_b,max_jacobi_iterations[stage-2],jacobi_weight,tol,sos_residual_d,sos_residual_h,os);
+					jacobi_status=jacobi_poisson_2D_device<F,F2,S>(alpha_curr,beta_curr,boundary_padding_thickness,m,k,C_buf_next,pitch_c_buf[stage-2],C_d,pitch_c,B_d,pitch_b,max_jacobi_iterations[stage-2],jacobi_weight,tol,sos_residual_d,sos_residual_h,os);
 
 					//Synchronize Buffer C_d to contain the same values as C_buf
 					if ((max_jacobi_iterations[0]%2) !=0){
-						cudaError_t cpyerr=gpuErrorCheck(cudaMemcpy2D(C_d,pitch_c,C_buf[0],pitch_c_buf[0],n*sizeof(float2),n,cudaMemcpyDeviceToDevice),os);
+						cudaError_t cpyerr=gpuErrorCheck(cudaMemcpy2D(C_d,pitch_c,C_buf[0],pitch_c_buf[0],k*sizeof(float2),m,cudaMemcpyDeviceToDevice),os);
 						
 						if (cpyerr!=cudaSuccess){
 							return DesalStatus::CUDAError;
@@ -285,7 +285,7 @@ namespace desal {
 			}
 			
 			
-			//print_vector_field_k2<<<1,1>>>(n,n, C_d, pitch_c,'W');	
+			print_vector_field_k2<<<1,1>>>(m,k, C_d, pitch_c,'W');	
 			return jacobi_status;
 			
 		}
@@ -293,9 +293,8 @@ namespace desal {
 
 		
 		template<class F, class F2, class S>
-		DesalStatus mg_vc_poisson_2D_device(F alpha, F gamma, F eta, int boundary_padding_thickness, int n, F2* B_d, int pitch_b, F2* C_d, int pitch_c, int* max_jacobi_iterations, int multigrid_stages, F jacobi_weight=1.0,F tol=0.1, F* sos_residual=nullptr, S* os=nullptr){
-			int m=n;
-			int k=n;
+		DesalStatus mg_vc_poisson_2D_device(F alpha, F gamma, F eta, int boundary_padding_thickness, int m, int k, F2* B_d, size_t pitch_b, F2* C_d, size_t pitch_c, int* max_jacobi_iterations, int multigrid_stages, F jacobi_weight=1.0,F tol=0.1, F* sos_residual=nullptr, S* os=nullptr){
+		
 			float v=3*(1<<(multigrid_stages-1));
 			
 			if (multigrid_stages<1 || tol<0 || multigrid_stages >20 || m<v || k<v){			
@@ -314,7 +313,6 @@ namespace desal {
 			//int n_buf=2*n;
 		//	printf("Result:%d\n",n_buf);
 		
-			int n_buf=n;
 			F2* C_buf[20];
 			F2* r_buf[20];
 			size_t pitch_c_buf[20];
@@ -346,8 +344,8 @@ namespace desal {
 			//Same threads_per_block as reduce_sum_of_squares_poisson_field_residual_device
 			constexpr int threads_per_block_x=8;
 			constexpr int threads_per_block_y=4;
-			int blocks_x=ceil(static_cast<F>(n)/(2*threads_per_block_x));
-			int blocks_y=ceil(static_cast<F>(n)/(2*threads_per_block_y));
+			int blocks_x=ceil(static_cast<F>(k)/(2*threads_per_block_x));
+			int blocks_y=ceil(static_cast<F>(m)/(2*threads_per_block_y));
 			size_t size_e=blocks_x*blocks_y*sizeof(F);
 			cudaMalloc((void**) &sos_residual_d,size_e);
 			cudaError_t err=gpuErrorCheck(cudaMemset(sos_residual_d,0,size_e),os);
@@ -359,12 +357,11 @@ namespace desal {
 			}
 
 
-			DesalStatus res= mg_vc_poisson_2D_nobuf_device<F,F2,S>(alpha, gamma,eta, boundary_padding_thickness, n, B_d, pitch_b, C_d, pitch_c, C_buf, pitch_c_buf, r_buf, pitch_r_buf, max_jacobi_iterations,multigrid_stages, jacobi_weight,tol,sos_residual_d, &sos_residual_h, os);
+			DesalStatus res= mg_vc_poisson_2D_nobuf_device<F,F2,S>(alpha, gamma,eta, boundary_padding_thickness, m,k, B_d, pitch_b, C_d, pitch_c, C_buf, pitch_c_buf, r_buf, pitch_r_buf, max_jacobi_iterations,multigrid_stages, jacobi_weight,tol,sos_residual_d, &sos_residual_h, os);
 			//DesalStatus res=DesalStatus::Success;
 			deallocate_buffer_array(C_buf,multigrid_stages);
 			deallocate_buffer_array(r_buf,multigrid_stages);
 			
-			cudaFree(sos_residual_d);
 			if (sos_residual){
 				*sos_residual=sos_residual_h;
 			}

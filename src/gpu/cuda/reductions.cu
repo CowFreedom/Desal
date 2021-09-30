@@ -63,14 +63,15 @@ namespace desal{
 		//AX=B
 		template<unsigned int THREADS_X_PER_BLOCK,unsigned int THREADS_Y_PER_BLOCK, class F, class F2>
 		__global__
-		void k_reduce_sum_of_squares_poisson_field_residual(F alpha_inv, F beta, int boundary_padding_thickness, int n, cudaTextureObject_t A,cudaTextureObject_t B, F* r, int stride_r){
+		void k_reduce_sum_of_squares_poisson_field_residual(F alpha_inv, F beta, int boundary_padding_thickness, int m, int k, cudaTextureObject_t A,cudaTextureObject_t B, F* r, int stride_r){
 		//printf("Durch\n");
-			n-=2*boundary_padding_thickness;
-			if (n< (blockIdx.x*2*blockDim.x) || n<(blockIdx.y*blockDim.y)){
+			k-=2*boundary_padding_thickness;
+			m-=2*boundary_padding_thickness;
+			if (k< (blockIdx.x*2*blockDim.x) || m<(blockIdx.y*blockDim.y)){
 				return;
 			}		
 			
-			int effective_gridDim_x=ceil(n/(2.0*THREADS_X_PER_BLOCK));
+			int effective_gridDim_x=ceil(k/(2.0*THREADS_X_PER_BLOCK));
 			//printf("n: %d, idx:%d, idy: %d\n",n,blockIdx.x*2*blockDim.x,blockIdx.y*blockDim.y);
 			constexpr int blocksize=THREADS_X_PER_BLOCK*THREADS_Y_PER_BLOCK;
 
@@ -88,11 +89,11 @@ namespace desal{
 			sdata[index]=F(0.0); //initialize relevant part of the sdata array
 			//printf("alpha_inv: %f, beta: %f\n",alpha_inv,beta);
 
-			for (int fy=idy;fy<n;fy+=gridDim.y*blockDim.y){
+			for (int fy=idy;fy<m;fy+=gridDim.y*blockDim.y){
 				//int fy=idy+hs;
 				//int fx=idx;		
 				
-				for (int fx=idx;fx<n;fx+=gridDim.x*2*blockDim.x){
+				for (int fx=idx;fx<k;fx+=gridDim.x*2*blockDim.x){
 					//fx+=ws;
 			
 					F2 v=tex2D<F2>(A,fx+boundary_padding_thickness+0.5,fy+boundary_padding_thickness+0.5);
@@ -114,7 +115,7 @@ namespace desal{
 					//printf("sdata %f\n",sdata[index]);
 					//printf("y,x: %d, %d , diffx: %f diffy: %f\n",fy,fx,diff.x, diff.x);
 			
-					if ((fx+blockDim.x)<n && (fy)<n){
+					if ((fx+blockDim.x)<k && (fy<m)){
 						F2 v=tex2D<F2>(A,fx+blockDim.x+boundary_padding_thickness+0.5,fy+boundary_padding_thickness+0.5);
 						F2 vlower=tex2D<F2>(A,fx+blockDim.x+boundary_padding_thickness+0.5,fy-1+boundary_padding_thickness+0.5);
 						F2 vupper=tex2D<F2>(A,fx+blockDim.x+boundary_padding_thickness+0.5,fy+1+boundary_padding_thickness+0.5);
@@ -319,7 +320,7 @@ namespace desal{
 
 		template<class F, class F2>
 		__host__
-		cudaError_t reduce_sum_of_squares_poisson_field_residual_device(F alpha, F beta, int boundary_padding_thickness, int n, F2* A_d,int pitch_a, F2* B_d, int pitch_b, F* r_d, int stride_r){
+		cudaError_t reduce_sum_of_squares_poisson_field_residual_device(F alpha, F beta, int boundary_padding_thickness, int m, int k, F2* A_d,int pitch_a, F2* B_d, int pitch_b, F* r_d, int stride_r){
 			if (r_d==nullptr || alpha==0.0 || beta ==0.0 ){
 			
 				if (r_d==nullptr){
@@ -341,8 +342,8 @@ namespace desal{
 			memset(&resDescA,0,sizeof(resDescA));
 			resDescA.resType = cudaResourceTypePitch2D;
 			resDescA.res.pitch2D.devPtr=A_d;
-			resDescA.res.pitch2D.width=n-boundary_padding_thickness;
-			resDescA.res.pitch2D.height=n-boundary_padding_thickness;
+			resDescA.res.pitch2D.width=k-boundary_padding_thickness;
+			resDescA.res.pitch2D.height=m-boundary_padding_thickness;
 			resDescA.res.pitch2D.pitchInBytes=pitch_a;
 			resDescA.res.pitch2D.desc=cudaCreateChannelDesc<F2>(); //is equivalent to cudaCreateChannelDesc(32,32,0,0,cudaChannelFormatKindFloat)
 
@@ -350,8 +351,8 @@ namespace desal{
 			memset(&resDescB,0,sizeof(resDescB));
 			resDescB.resType = cudaResourceTypePitch2D;
 			resDescB.res.pitch2D.devPtr=B_d;
-			resDescB.res.pitch2D.width=n-boundary_padding_thickness;
-			resDescB.res.pitch2D.height=n-boundary_padding_thickness;
+			resDescB.res.pitch2D.width=k-boundary_padding_thickness;
+			resDescB.res.pitch2D.height=m-boundary_padding_thickness;
 			resDescB.res.pitch2D.pitchInBytes=pitch_b;
 			resDescB.res.pitch2D.desc=cudaCreateChannelDesc<F2>(); //is equivalent to cudaCreateChannelDesc(32,32,0,0,cudaChannelFormatKindFloat)
 
@@ -375,14 +376,14 @@ namespace desal{
 				return (error1!=cudaSuccess)?error1:error2;
 			}
 				
-			int blocks_x=ceil(static_cast<F>(n)/(2*threads_per_block_x));
-			int blocks_y=ceil(static_cast<F>(n)/(2*threads_per_block_y));
+			int blocks_x=ceil(static_cast<F>(k)/(2*threads_per_block_x));
+			int blocks_y=ceil(static_cast<F>(m)/(2*threads_per_block_y));
 			
 			dim3 blocks=dim3(blocks_x,blocks_y,1);
 			dim3 threads=dim3(threads_per_block_x,threads_per_block_y,1);
-			k_reduce_sum_of_squares_poisson_field_residual<threads_per_block_x,threads_per_block_y,F,F2><<<blocks,threads>>>(alpha_inv,beta,boundary_padding_thickness,n, A_tex,B_tex, r_d,stride_r);
+			k_reduce_sum_of_squares_poisson_field_residual<threads_per_block_x,threads_per_block_y,F,F2><<<blocks,threads>>>(alpha_inv,beta,boundary_padding_thickness,m,k, A_tex,B_tex, r_d,stride_r);
 			
-			n=blocks_x*blocks_y;
+			int n=blocks_x*blocks_y;
 		
 			reduce_sum_device<F>(n,r_d,stride_r);
 			
@@ -392,11 +393,11 @@ namespace desal{
 
 
 		template
-		cudaError_t reduce_sum_of_squares_poisson_field_residual_device(float alpha, float beta, int boundary_padding_thickness, int n, float2* A_d,int pitch_a, float2* B_d, int pitch_b, float* r_d, int stride_r);
+		cudaError_t reduce_sum_of_squares_poisson_field_residual_device(float alpha, float beta, int boundary_padding_thickness, int m, int k, float2* A_d,int pitch_a, float2* B_d, int pitch_b, float* r_d, int stride_r);
 
 		template<class F, class F2>
 		__host__
-		cudaError_t reduce_sum_of_squares_poisson_field_residual_device(F alpha, F beta, int boundary_padding_thickness, int n, F2* A_d,int pitch_a, cudaTextureObject_t B_tex, F* r_d, int stride_r){
+		cudaError_t reduce_sum_of_squares_poisson_field_residual_device(F alpha, F beta, int boundary_padding_thickness, int m, int k, F2* A_d,int pitch_a, cudaTextureObject_t B_tex, F* r_d, int stride_r){
 			if (r_d==nullptr || alpha==0.0 || beta ==0.0 ){
 				if (r_d==nullptr){
 					return cudaErrorInvalidValue;
@@ -417,8 +418,8 @@ namespace desal{
 			memset(&resDescA,0,sizeof(resDescA));
 			resDescA.resType = cudaResourceTypePitch2D;
 			resDescA.res.pitch2D.devPtr=A_d;
-			resDescA.res.pitch2D.width=n-boundary_padding_thickness;
-			resDescA.res.pitch2D.height=n-boundary_padding_thickness;
+			resDescA.res.pitch2D.width=k-boundary_padding_thickness;
+			resDescA.res.pitch2D.height=m-boundary_padding_thickness;
 			resDescA.res.pitch2D.pitchInBytes=pitch_a;
 			resDescA.res.pitch2D.desc=cudaCreateChannelDesc<F2>(); //is equivalent to cudaCreateChannelDesc(32,32,0,0,cudaChannelFormatKindFloat)
 
@@ -439,34 +440,34 @@ namespace desal{
 				return err;
 			}
 				
-			int blocks_x=ceil(static_cast<F>(n)/(2*threads_per_block_x));
-			int blocks_y=ceil(static_cast<F>(n)/(2*threads_per_block_y));
+			int blocks_x=ceil(static_cast<F>(k)/(2*threads_per_block_x));
+			int blocks_y=ceil(static_cast<F>(m)/(2*threads_per_block_y));
 			
 			dim3 blocks=dim3(blocks_x,blocks_y,1);
 			dim3 threads=dim3(threads_per_block_x,threads_per_block_y,1);
-			k_reduce_sum_of_squares_poisson_field_residual<threads_per_block_x,threads_per_block_y,F,F2><<<blocks,threads>>>(alpha_inv,beta,boundary_padding_thickness,n, A_tex,B_tex, r_d,stride_r);
+			k_reduce_sum_of_squares_poisson_field_residual<threads_per_block_x,threads_per_block_y,F,F2><<<blocks,threads>>>(alpha_inv,beta,boundary_padding_thickness,m,k,A_tex,B_tex, r_d,stride_r);
 			
-			n=blocks_x*blocks_y;
+			int n=blocks_x*blocks_y;
 			
 			reduce_sum_device<F>(n,r_d,stride_r);
 			return cudaSuccess;
 		}
 
 		template
-		cudaError_t reduce_sum_of_squares_poisson_field_residual_device(float alpha, float beta, int boundary_padding_thickness, int n, float2* A_d,int pitch_a, cudaTextureObject_t B_tex, float* r_d, int stride_r);
+		cudaError_t reduce_sum_of_squares_poisson_field_residual_device(float alpha, float beta, int boundary_padding_thickness, int m, int k, float2* A_d,int pitch_a, cudaTextureObject_t B_tex, float* r_d, int stride_r);
 
 
 		template<class F2>
 		__global__
-		void k_restrict2h(int n, F2* dest, int pitch_dest, F2* src, int pitch_src){
+		void k_restrict2h(int m, int k, F2* dest, int pitch_dest, F2* src, int pitch_src){
 			int idy=blockIdx.y*blockDim.y+threadIdx.y;
 			int idx=blockIdx.x*blockDim.x+threadIdx.x;
 			
 			dest=(F2*) ((char*)dest+idy*pitch_dest);
 			src=(F2*) ((char*)src+2*idy*pitch_src);
 			
-			for(int i=idy;i<n;i+=gridDim.y*blockDim.y){
-				for(int j = idx; j<n; j+=gridDim.x*blockDim.x){
+			for(int i=idy;i<m;i+=gridDim.y*blockDim.y){
+				for(int j = idx; j<k; j+=gridDim.x*blockDim.x){
 					dest[j].x=src[2*j].x;
 					dest[j].y=src[2*j].y;
 				}
@@ -477,15 +478,15 @@ namespace desal{
 
 		template<class F, class F2>
 		__global__
-		void k_restrict(F h, int n, F2* dest, int pitch_dest,cudaTextureObject_t src){
+		void k_restrict(F hy, F hx, int m, int k, F2* dest, int pitch_dest,cudaTextureObject_t src){
 			int idy=blockIdx.y*blockDim.y+threadIdx.y;
 			int idx=blockIdx.x*blockDim.x+threadIdx.x;
 			
 			dest=(F2*) ((char*)dest+idy*pitch_dest);
 			
-			for(int i=idy;i<n;i+=gridDim.y*blockDim.y){
-				for(int j = idx; j<n; j+=gridDim.x*blockDim.x){
-					F2 v=tex2D<F2>(src,h*j+0.5,h*i+0.5);
+			for(int i=idy;i<m;i+=gridDim.y*blockDim.y){
+				for(int j = idx; j<k; j+=gridDim.x*blockDim.x){
+					F2 v=tex2D<F2>(src,hx*j+0.5,hy*i+0.5);
 					//printf("i: %d j: %d val: %f\n",i,j,v.x);
 					dest[j].x+=v.x;
 					dest[j].y+=v.y;													
@@ -496,17 +497,17 @@ namespace desal{
 
 		template<class F, class F2>
 		__host__
-		cudaError_t restrict(int n, int n_r, F2* dest, int pitch_dest, F2* src, int pitch_src){
+		cudaError_t restrict(int m, int k, int m_r, int k_r, F2* dest, int pitch_dest, F2* src, int pitch_src){
 			int threads_per_block_x=256;	
 			int threads_per_block_y=4;	
-			int blocks_x=ceil(static_cast<float>(n_r)/(threads_per_block_x));
-			int blocks_y=ceil(static_cast<float>(n_r)/(threads_per_block_y));
+			int blocks_x=ceil(static_cast<float>(k_r)/(threads_per_block_x));
+			int blocks_y=ceil(static_cast<float>(m_r)/(threads_per_block_y));
 			
 			dim3 threads=dim3(threads_per_block_x,threads_per_block_y,1);
 			dim3 blocks=dim3(blocks_x,blocks_y,1);
 			//printf("n: %d, nr: %d\n",n,n_r);
-			if (((n%2)!=0)&&((n_r%2)!=0)){		
-				k_restrict2h<F2><<<blocks,threads>>>(n_r,dest, pitch_dest, src,pitch_src);
+			if (((m%2)!=0)&&((m_r%2)!=0)&&((k%2)!=0)&&((k_r%2)!=0)){		
+				k_restrict2h<F2><<<blocks,threads>>>(m_r,k_r, dest, pitch_dest, src,pitch_src);
 			}
 			else{
 
@@ -516,8 +517,8 @@ namespace desal{
 
 				resDesc.resType = cudaResourceTypePitch2D;
 				resDesc.res.pitch2D.devPtr=src;
-				resDesc.res.pitch2D.width=n;
-				resDesc.res.pitch2D.height=n;
+				resDesc.res.pitch2D.width=k;
+				resDesc.res.pitch2D.height=m;
 				resDesc.res.pitch2D.pitchInBytes=pitch_src;
 				resDesc.res.pitch2D.desc=cudaCreateChannelDesc<F2>(); 
 
@@ -537,15 +538,16 @@ namespace desal{
 				if (err !=cudaSuccess){
 					return err;
 				}		
-				F h=static_cast<F>(n)/(n_r-1);
-				k_restrict<F,F2><<<blocks,threads>>>(h,n_r,dest, pitch_dest, src_tex);
+				F hx=static_cast<F>(k)/(k_r-1);
+				F hy=static_cast<F>(m)/(m_r-1);
+				k_restrict<F,F2><<<blocks,threads>>>(hy, hx, m_r,k_r,dest, pitch_dest, src_tex);
 			}
 			return cudaSuccess;
 			
 		}
 
 		template
-		cudaError_t restrict<float, float2>(int n, int n_r, float2* dest, int pitch_dest, float2* src, int pitch_src);
+		cudaError_t restrict<float, float2>(int m, int k, int m_r, int k_r, float2* dest, int pitch_dest, float2* src, int pitch_src);
 
 		/*
 		template

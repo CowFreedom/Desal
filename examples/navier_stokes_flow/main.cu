@@ -13,7 +13,7 @@
 #include "../../diagnostics/correctness/gpu/cuda/utility.h"
 
 
-void multigrid_example(float height, float width, int m, int k){
+void navier_stokes_example(float height, float width, int m, int k){
 
 		//Problem parameters
 		float viscousity=1;
@@ -24,32 +24,39 @@ void multigrid_example(float height, float width, int m, int k){
 		int max_jacobi_iterations_per_stage[]={30,30,30,30,30,30,30,30,30,30};//maximum number of iterations per multigrid stage
 		float jacobi_weight=1.0; //weight factor of the weighted Jacobi method
 		float jacobi_tol=0.1; //if sum of squares of the residual goes below this value, the estimation of x in Ax=b terminates and returns DesalStatus::Success
-		float sos_residual; // this saves the sum of squares of the residual
-		
 		
 
 		//Allocate Vectors
 		float2* U_old; //flow field vector
 		float2* U_new; //flow field vector buffer
+		float2* F; //flow field vector buffer
+		
 	
 		size_t pitch_u_old;
 		size_t pitch_u_new;
+		size_t pitch_f;
 		
 		cudaMallocPitch((void**)&U_new,&pitch_u_new,sizeof(float2)*k,m);
 		cudaMallocPitch((void**)&U_old,&pitch_u_old,sizeof(float2)*k,m);	
+		cudaMallocPitch((void**)&F,&pitch_f,sizeof(float2)*k,m);	
 		
 		//Initialize grid
-		cudaMemset(U_old,0.0,sizeof(float2)*k*m);	
+		cudaMemset2D(U_old,pitch_u_old,0.0,sizeof(float2)*k,m);	
 		
-		float2 u_val;
-		
+		float2 u_val;	
 		u_val.x=1;
-		u_val.y=2;
+		u_val.y=-1;
+		
+		float2 f_val;
+		f_val.x=0;
+		f_val.y=0;
 
 		//desal::cuda::fill_array_ascendingly2D_f32(m,k,1,U,pitch_u,0);
+		//desal::cuda::fill_array_uniformly2D<float2>(m,k,1,U_old,pitch_u_old,u_val);
+		desal::cuda::fill_array_uniformly2D<float2>(m,k,1,U_old,pitch_u_old,u_val);
 		desal::cuda::fill_array_uniformly2D<float2>(m,k,1,U_old,pitch_u_old,u_val);
 		
-		desal::cuda::navier_stokes_2D_device(dt, viscousity, 1, dy,dx,  m,k, U_old, pitch_u_old, U_new, pitch_u_new, max_jacobi_iterations_per_stage, multigrid_stages,jacobi_weight,  jacobi_tol, &std::cout);
+		desal::cuda::navier_stokes_2D_device<float,float2,std::ostream>(dt, viscousity, 1, dy,dx,  m,k, U_old,F, pitch_f pitch_u_old, U_new, pitch_u_new, max_jacobi_iterations_per_stage, multigrid_stages,jacobi_weight,  jacobi_tol, &std::cout);
 
 		
 
@@ -63,10 +70,10 @@ int main(){
 	cudaMemGetInfo(&free_device_memory,&total_device_memory);
 	
 	std::cout<<"This device has "<<total_device_memory/(1000000000.0)<<" Gigabytes of GPU memory\n";
-	int x_points=20;
-	int y_points=20;
-	float height=1.0;
-	float width=1.0;
-	multigrid_example(height,width,y_points,x_points); //TODO: Test n=97
+	int x_points=21;
+	int y_points=21;
+	float height=10.0;
+	float width=10.0;
+	navier_stokes_example(height,width,y_points,x_points); //TODO: Test n=97
 	std::cout<<"Berechnung beendet\n";
 }

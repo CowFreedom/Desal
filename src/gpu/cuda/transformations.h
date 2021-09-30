@@ -16,6 +16,7 @@ namespace desal{
 
 		//template<class F2>
 		__host__
-		cudaError_t prolong_and_add(int n_p, int n_r, float2* dest, int pitch_dest, float2* src, int pitch_s);
+		cudaError_t prolong_and_add(int m_p, int k_p, int m_r, int k_r, float2* dest, int pitch_dest, float2* src, int pitch_s);
+
 	}
 }

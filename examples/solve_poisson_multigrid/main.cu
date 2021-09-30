@@ -13,17 +13,15 @@
 #include "../../diagnostics/correctness/gpu/cuda/utility.h"
 
 
-void multigrid_example(int n, int reps){
+void multigrid_example(int m, int k, int reps){
 
 
 	for (int i=1;i<=reps;i++){	
 		float2* U; //flow field vector
 		float2* B; //flow field vector
-		float* r; // stores diffused velocity field
-		int width=n;
-		int height=n;
-		int k=n;
-		int m=n;
+
+		int height=m;
+		int width=k;
 		
 		//Problem parameters
 		float dt=1;
@@ -44,9 +42,6 @@ void multigrid_example(int n, int reps){
 
 		cudaMemcpy2D(B,pitch_b,U,pitch_u,k*sizeof(float2),m,cudaMemcpyDeviceToDevice);
 		cudaMemset2D(B,pitch_b,0.0,(k-2)*sizeof(float2),m-2);	
-
-		cudaMalloc((void**)&r,sizeof(float)*k*m);
-		cudaMemset(r,0.0,sizeof(float)*k*m);
 		
 		//Create b and starting vector x0 in Ax0=b
 		//float2 u_val;
@@ -72,14 +67,14 @@ void multigrid_example(int n, int reps){
 		//Function to measure
 
 		std::cout<<std::setprecision(2)<<std::fixed;
-		auto res=desal::cuda::mg_vc_poisson_2D_device<float, float2,std::ostream>(alpha, gamma,eta, 1, n, B, pitch_b, U, pitch_u,max_jacobi_iterations_per_stage,multigrid_stages, jacobi_weight, tol, &sos_residual,&std::cout);
+		auto res=desal::cuda::mg_vc_poisson_2D_device<float, float2,std::ostream>(alpha, gamma,eta, 1, m,k, B, pitch_b, U, pitch_u,max_jacobi_iterations_per_stage,multigrid_stages, jacobi_weight, tol, &sos_residual,&std::cout);
 		// Get ending timepoint 
 		auto stop = std::chrono::high_resolution_clock::now(); 
 		 
 		auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start); 
 		std::cout<<"\n"<<std::right<<"Problemsize"<<std::right<<std::setw(20)<<"Time [ms]"<<std::setw(40)<<"V-Cycle Stages"<<std::setw(30)<<"Sum of Squares of Residual\n";
 
-		std::cout<<std::right<<n<<std::setw(20)<<std::right<<duration.count()<<std::setw(40)<<multigrid_stages<<std::setw(30)<<sos_residual<<"\n";
+		std::cout<<std::right<<m<<std::setw(20)<<std::right<<duration.count()<<std::setw(40)<<multigrid_stages<<std::setw(30)<<sos_residual<<"\n";
 		
 		if (sos_residual<tol && sos_residual>=0){
 			std::cout<<"The sum of squares error could be successfully reduced below the set tolerance\n\n";
@@ -92,7 +87,7 @@ void multigrid_example(int n, int reps){
 			std::cout<<"The sum of squares error could not be successfully reduced below the set tolerance. Try more multigrid stages, more iterations per stage or a higher error tolerance\n\n";
 		}
 
-		cudaFree(r);
+		cudaFree(B);
 		cudaFree(U);
 	
 			
@@ -105,8 +100,10 @@ int main(){
 	cudaMemGetInfo(&free_device_memory,&total_device_memory);
 	
 	std::cout<<"This device has "<<total_device_memory/(1000000000.0)<<" Gigabytes of GPU memory\n";
-	
-	multigrid_example(1000, 3);
+	int m=40;
+	int k=10;
+	multigrid_example(m,k, 1);
+
 
 
 }

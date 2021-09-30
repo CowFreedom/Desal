@@ -122,15 +122,15 @@ namespace desal{
 		//Prolongs source 2D array and adds it to destination
 		template<class F, class F2>
 		__global__
-		void k_prolong_by_interpolation_and_add(F h, int n, F2* dest, int pitch_dest, cudaTextureObject_t src){
+		void k_prolong_by_interpolation_and_add(F hy, F hx, int m, int k, F2* dest, int pitch_dest, cudaTextureObject_t src){
 			int idy=blockIdx.y*blockDim.y+threadIdx.y;
 			int idx=blockIdx.x*blockDim.x+threadIdx.x;
 			
 			dest=(F2*) ((char*)dest+idy*pitch_dest);
 
-			for(int i=idy;i<n;i+=gridDim.y*blockDim.y){
-				for(int j = idx; j<n; j+=gridDim.x*blockDim.x){
-					F2 v=tex2D<F2>(src,h*j+0.5,h*i+0.5);
+			for(int i=idy;i<m;i+=gridDim.y*blockDim.y){
+				for(int j = idx; j<k; j+=gridDim.x*blockDim.x){
+					F2 v=tex2D<F2>(src,hx*j+0.5,hy*i+0.5);
 					dest[j].x+=v.x;
 					dest[j].y+=v.y;													
 				}
@@ -141,7 +141,7 @@ namespace desal{
 		//Prolongs source 2D array and adds it to destination
 		template<class F2>
 		__host__
-		cudaError_t prolong_by_interpolation_and_add_2h(int m, int k, F2* dest, int pitch_dest, F2* src, int pitch_src){
+		cudaError_t prolong_by_interpolation_and_add_2h(int m_p, int k_p, int m_r, int k_r, F2* dest, int pitch_dest, F2* src, int pitch_src){
 
 			//Create Resource descriptions
 			cudaResourceDesc resDesc;
@@ -149,8 +149,8 @@ namespace desal{
 
 			resDesc.resType = cudaResourceTypePitch2D;
 			resDesc.res.pitch2D.devPtr=src;
-			resDesc.res.pitch2D.width=ceil((k-1)*0.5+1);
-			resDesc.res.pitch2D.height=ceil((m-1)*0.5+1);
+			resDesc.res.pitch2D.width=m_r;
+			resDesc.res.pitch2D.height=m_r;
 			resDesc.res.pitch2D.pitchInBytes=pitch_src;
 			resDesc.res.pitch2D.desc=cudaCreateChannelDesc<F2>(); 
 
@@ -173,19 +173,19 @@ namespace desal{
 			}
 			int threads_per_block_x=256;	
 			int threads_per_block_y=4;	
-			int blocks_x=ceil(static_cast<float>(m)/(threads_per_block_x));
-			int blocks_y=ceil(static_cast<float>(k)/(threads_per_block_y));
+			int blocks_x=ceil(static_cast<float>(k_p)/(threads_per_block_x));
+			int blocks_y=ceil(static_cast<float>(m_p)/(threads_per_block_y));
 			
 			dim3 threads=dim3(threads_per_block_x,threads_per_block_y,1);
 			dim3 blocks=dim3(blocks_x,blocks_y,1);
-			k_prolong_by_interpolation_and_add_2h<F2><<<blocks,threads>>>(m,k, dest, pitch_dest, src_tex);
+			k_prolong_by_interpolation_and_add_2h<F2><<<blocks,threads>>>(m_p,k_p, dest, pitch_dest, src_tex);
 			return cudaSuccess;
 		}
 
 		//Prolongs source 2D array and adds it to destination
 		template<class F, class F2>
 		__host__
-		cudaError_t prolong_by_interpolation_and_add(F h, int n_p, int n_r, F2* dest, int pitch_dest, F2* src, int pitch_src){
+		cudaError_t prolong_by_interpolation_and_add(F hy, F hx, int m_p, int k_p, int m_r, int k_r, F2* dest, int pitch_dest, F2* src, int pitch_src){
 
 			//Create Resource descriptions
 			cudaResourceDesc resDesc;
@@ -193,8 +193,8 @@ namespace desal{
 
 			resDesc.resType = cudaResourceTypePitch2D;
 			resDesc.res.pitch2D.devPtr=src;
-			resDesc.res.pitch2D.width=n_r;
-			resDesc.res.pitch2D.height=n_r;
+			resDesc.res.pitch2D.width=k_r;
+			resDesc.res.pitch2D.height=m_r;
 			resDesc.res.pitch2D.pitchInBytes=pitch_src;
 			resDesc.res.pitch2D.desc=cudaCreateChannelDesc<F2>(); 
 
@@ -215,32 +215,33 @@ namespace desal{
 			}	
 			int threads_per_block_x=256;	
 			int threads_per_block_y=4;	
-			int blocks_x=ceil(static_cast<float>(n_p)/(threads_per_block_x));
-			int blocks_y=ceil(static_cast<float>(n_p)/(threads_per_block_y));
+			int blocks_x=ceil(static_cast<float>(k_p)/(threads_per_block_x));
+			int blocks_y=ceil(static_cast<float>(m_p)/(threads_per_block_y));
 			
 			dim3 threads=dim3(threads_per_block_x,threads_per_block_y,1);
 			dim3 blocks=dim3(blocks_x,blocks_y,1);
-			k_prolong_by_interpolation_and_add<F,F2><<<blocks,threads>>>(h,n_p, dest, pitch_dest, src_tex);
+			k_prolong_by_interpolation_and_add<F,F2><<<blocks,threads>>>(hy,hx,m_p,k_p, dest, pitch_dest, src_tex);
 			return cudaSuccess;
 		}
 
 		//template<class F2>
 		__host__
-		cudaError_t prolong_and_add(int n_p,int n_r, float2* dest, int pitch_dest, float2* src, int pitch_src){
+		cudaError_t prolong_and_add(int m_p, int k_p, int m_r, int k_r, float2* dest, int pitch_dest, float2* src, int pitch_src){
 			using F2=float2;
 
-			if (((n_p)%2)!=0){
-				return prolong_by_interpolation_and_add_2h<F2>(n_r, n_r, dest, pitch_dest,src,pitch_src);	
+			if ((((m_p)%2)!=0)&&((k_p%2)!=0)){
+				return prolong_by_interpolation_and_add_2h<F2>(m_p, k_p, m_r, k_r, dest, pitch_dest,src,pitch_src);	
 			}
 			else{
-				float h=static_cast<float>(n_r)/(n_p-1);
+				float hy=static_cast<float>(m_r)/(m_p-1);
+				float hx=static_cast<float>(k_r)/(k_p-1);
 				//printf("Hier: %f  %d %d\n",h, n_r, n_p);
-				return prolong_by_interpolation_and_add<float,F2>(h,n_p, n_r, dest, pitch_dest,src,pitch_src);	
+				return prolong_by_interpolation_and_add<float,F2>(hy,hx,m_p,k_p,m_r,k_r, dest, pitch_dest,src,pitch_src);	
 			}
 			
 		}
 
 		__host__
-		cudaError_t prolong_and_add(int n_p, int n_r, float2* dest, int pitch_dest, float2* src, int pitch_src);
+		cudaError_t prolong_and_add(int m_p, int k_p, int m_r, int k_r, float2* dest, int pitch_dest, float2* src, int pitch_src);
 	}
 }
