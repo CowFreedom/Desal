@@ -12,7 +12,6 @@
 #include "../../src/gpu/cuda/solvers/navier_stokes.h"
 #include "../../diagnostics/correctness/gpu/cuda/utility.h"
 
-
 void navier_stokes_example(float height, float width, int m, int k){
 
 		//Problem parameters
@@ -53,11 +52,13 @@ void navier_stokes_example(float height, float width, int m, int k){
 
 		//desal::cuda::fill_array_ascendingly2D_f32(m,k,1,U,pitch_u,0);
 		//desal::cuda::fill_array_uniformly2D<float2>(m,k,1,U_old,pitch_u_old,u_val);
-		desal::cuda::fill_array_uniformly2D<float2>(m,k,1,U_old,pitch_u_old,u_val);
-		desal::cuda::fill_array_uniformly2D<float2>(m,k,1,U_old,pitch_u_old,u_val);
 		
-		desal::cuda::navier_stokes_2D_device<float,float2,std::ostream>(dt, viscousity, 1, dy,dx,  m,k, U_old,F, pitch_f pitch_u_old, U_new, pitch_u_new, max_jacobi_iterations_per_stage, multigrid_stages,jacobi_weight,  jacobi_tol, &std::cout);
-
+			
+		desal::cuda::fill_array_uniformly2D<float2>(m,k,1,U_old,pitch_u_old,u_val);
+		desal::cuda::fill_array_uniformly2D<float2>(m,k,1,U_old,pitch_u_old,u_val);
+		desal::cuda::print_vector_field_k2<<<1,1>>>(m,k, U_old, pitch_u_old,'O');
+		desal::cuda::navier_stokes_2D_device<float,float2,std::ostream>(dt, viscousity, 1, dy,dx,  m,k, U_old,pitch_u_old, F, pitch_f, U_new, pitch_u_new, max_jacobi_iterations_per_stage, multigrid_stages,jacobi_weight,  jacobi_tol, &std::cout);
+		desal::cuda::print_vector_field_k2<<<1,1>>>(m,k, U_new, pitch_u_new,'N');
 		
 
 	cudaFree(U_new);

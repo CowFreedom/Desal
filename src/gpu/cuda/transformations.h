@@ -18,5 +18,10 @@ namespace desal{
 		__host__
 		cudaError_t prolong_and_add(int m_p, int k_p, int m_r, int k_r, float2* dest, int pitch_dest, float2* src, int pitch_s);
 
+		template<class F, class F2>
+		cudaError_t divergence(F dy, F dx, int boundary_padding_thickness, int m, int k,F2* A_d, size_t pitch_a, F2* C_d, size_t pitch_c);
+		
+		template<class F, class F2>
+		cudaError_t subtract_gradient(F dy, F dx, int boundary_padding_thickness, int m, int k,F2* A_d, size_t pitch_a, F2* C_d, size_t pitch_c);
 	}
 }

@@ -240,7 +240,154 @@ namespace desal{
 			}
 			
 		}
+		
+		template<class F, class F2>
+		__global__
+		void k_divergence(F one_half_dy, F one_half_dx, int boundary_padding_thickness, int m, int k,cudaTextureObject_t A, F2* C, size_t pitch_c){
+			m-=2*boundary_padding_thickness;
+			k-=2*boundary_padding_thickness;
+			if (k< (blockIdx.x*blockDim.x) || m<(blockIdx.y*blockDim.y)){
+				return;
+			}
+			
+			int idy=blockIdx.y*blockDim.y+threadIdx.y;
+			int idx=blockIdx.x*blockDim.x+threadIdx.x;
+			C=((F2*) ((char*)C+(idy+boundary_padding_thickness)*pitch_c))+boundary_padding_thickness;
+		
+			for (int i=idy;i<m;i+=gridDim.y*blockDim.y){	
+					
+				for (int j=idx;j<k;j+=gridDim.x*blockDim.x){				
+					F2 v=tex2D<F2>(A,i+boundary_padding_thickness+0.5,j+boundary_padding_thickness+0.5);
+					F2 vlower=tex2D<F2>(A,i+boundary_padding_thickness+0.5,j-1+boundary_padding_thickness+0.5);
+					F2 vupper=tex2D<F2>(A,i+boundary_padding_thickness+0.5,j+1+boundary_padding_thickness+0.5);
+					F2 vleft=tex2D<F2>(A,i-1+boundary_padding_thickness+0.5,j+boundary_padding_thickness+0.5);
+					F2 vright=tex2D<F2>(A,i+1+boundary_padding_thickness+0.5,j+boundary_padding_thickness+0.5);			
+					C[j].x=one_half_dx*(vleft.x-vright.x)+one_half_dy*(+vupper.y-vlower.y);
+					C[j].y=0;
+				}		
+				C=(F2*) ((char*)C+gridDim.y*blockDim.y*pitch_c);	
+			}		
+		
+		}
+	
 
+		template<class F, class F2>
+		cudaError_t divergence(F dy, F dx, int boundary_padding_thickness, int m, int k,F2* A_d, size_t pitch_a, F2* C_d, size_t pitch_c){
+			//Create Resource descriptions
+			cudaResourceDesc resDesc;
+			memset(&resDesc,0,sizeof(resDesc));
+			resDesc.resType = cudaResourceTypePitch2D;
+			resDesc.res.pitch2D.devPtr=A_d;
+			resDesc.res.pitch2D.width=k;
+			resDesc.res.pitch2D.height=m;
+			resDesc.res.pitch2D.pitchInBytes=pitch_a;
+			resDesc.res.pitch2D.desc=cudaCreateChannelDesc<F2>(); 
+
+			//Create Texture description
+			cudaTextureDesc texDesc;
+			memset(&texDesc,0,sizeof(texDesc));
+			texDesc.normalizedCoords = false;
+			texDesc.filterMode = cudaFilterModeLinear;
+			texDesc.readMode=cudaReadModeElementType;
+			texDesc.addressMode[0] = cudaAddressModeBorder;
+			texDesc.addressMode[1] = cudaAddressModeBorder;
+
+			cudaTextureObject_t A_tex;
+			cudaError_t err=cudaCreateTextureObject(&A_tex, &resDesc, &texDesc, NULL);
+			
+			if (err !=cudaSuccess){
+				return err;
+			}				
+			int threads_per_block_x=256;	
+			int threads_per_block_y=4;	
+			int blocks_x=ceil(static_cast<float>(k)/(threads_per_block_x));
+			int blocks_y=ceil(static_cast<float>(m)/(threads_per_block_y));
+			
+			dim3 threads=dim3(threads_per_block_x,threads_per_block_y,1);
+			dim3 blocks=dim3(blocks_x,blocks_y,1);
+			k_divergence<F,F2><<<blocks,threads>>>(0.5*dy, 0.5*dx, boundary_padding_thickness, m, k,A_tex, C_d, pitch_c);		
+			
+			return cudaSuccess;
+			
+		}
+		
+		template
+		cudaError_t divergence(float dy, float dx, int boundary_padding_thickness, int m, int k, float2* A_d, size_t pitch_a, float2* C_d, size_t pitch_c);
+
+		template<class F, class F2>
+		__global__
+		void k_subtract_gradient(F one_half_dy, F one_half_dx, int boundary_padding_thickness, int m, int k,cudaTextureObject_t A, F2* C, size_t pitch_c){
+			m-=2*boundary_padding_thickness;
+			k-=2*boundary_padding_thickness;
+			if (k< (blockIdx.x*blockDim.x) || m<(blockIdx.y*blockDim.y)){
+				return;
+			}
+			
+			int idy=blockIdx.y*blockDim.y+threadIdx.y;
+			int idx=blockIdx.x*blockDim.x+threadIdx.x;
+			C=(F2*) ((char*)C+(idy+boundary_padding_thickness)*pitch_c)+boundary_padding_thickness;
+			
+			for (int i=idy;i<m;i+=gridDim.y*blockDim.y){	
+							
+				for (int j=idx;j<k;j+=gridDim.x*blockDim.x){			
+					F2 v=tex2D<F2>(A,i+boundary_padding_thickness+0.5,j+boundary_padding_thickness+0.5);
+					F2 vlower=tex2D<F2>(A,i+boundary_padding_thickness+0.5,j-1+boundary_padding_thickness+0.5);
+					F2 vupper=tex2D<F2>(A,i+boundary_padding_thickness+0.5,j+1+boundary_padding_thickness+0.5);
+					F2 vleft=tex2D<F2>(A,i-1+boundary_padding_thickness+0.5,j+boundary_padding_thickness+0.5);
+					F2 vright=tex2D<F2>(A,i+1+boundary_padding_thickness+0.5,j+boundary_padding_thickness+0.5);			
+					
+					C[j].x-=one_half_dx*(vleft.x-vright.x);
+					C[j].y-=one_half_dy*(vupper.y-vlower.y);
+				}		
+				C=(F2*) ((char*)C+gridDim.y*blockDim.y*pitch_c);					
+			}		
+		
+		}
+
+		template<class F, class F2>
+		cudaError_t subtract_gradient(F dy, F dx, int boundary_padding_thickness, int m, int k,F2* A_d, size_t pitch_a, F2* C_d, size_t pitch_c){
+			//Create Resource descriptions
+			cudaResourceDesc resDesc;
+			memset(&resDesc,0,sizeof(resDesc));
+
+			resDesc.resType = cudaResourceTypePitch2D;
+			resDesc.res.pitch2D.devPtr=A_d;
+			resDesc.res.pitch2D.width=k;
+			resDesc.res.pitch2D.height=m;
+			resDesc.res.pitch2D.pitchInBytes=pitch_a;
+			resDesc.res.pitch2D.desc=cudaCreateChannelDesc<F2>(); 
+
+			//Create Texture description
+			cudaTextureDesc texDesc;
+			memset(&texDesc,0,sizeof(texDesc));
+			texDesc.normalizedCoords = false;
+			texDesc.filterMode = cudaFilterModeLinear;
+			texDesc.readMode=cudaReadModeElementType;
+			texDesc.addressMode[0] = cudaAddressModeBorder;
+			texDesc.addressMode[1] = cudaAddressModeBorder;
+
+			cudaTextureObject_t A_tex;
+			cudaError_t err=cudaCreateTextureObject(&A_tex, &resDesc, &texDesc, NULL);
+			
+			if (err !=cudaSuccess){
+				return err;
+			}				
+			int threads_per_block_x=256;	
+			int threads_per_block_y=4;	
+			int blocks_x=ceil(static_cast<float>(k)/(threads_per_block_x));
+			int blocks_y=ceil(static_cast<float>(m)/(threads_per_block_y));
+			
+			dim3 threads=dim3(threads_per_block_x,threads_per_block_y,1);
+			dim3 blocks=dim3(blocks_x,blocks_y,1);
+			k_subtract_gradient<F,F2><<<blocks,threads>>>(0.5*dy, 0.5*dx, boundary_padding_thickness, m, k,A_tex, C_d, pitch_c);		
+			
+			return cudaSuccess;
+			
+		}
+		
+		template
+		cudaError_t subtract_gradient(float dy, float dx, int boundary_padding_thickness, int m, int k, float2* A_d, size_t pitch_a, float2* C_d, size_t pitch_c);
+		
 		__host__
 		cudaError_t prolong_and_add(int m_p, int k_p, int m_r, int k_r, float2* dest, int pitch_dest, float2* src, int pitch_src);
 	}

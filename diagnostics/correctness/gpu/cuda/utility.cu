@@ -84,7 +84,6 @@ namespace desal{
 			}
 		}
 		
-
 		__host__
 		void fill_array_ascendingly2D_f32(int m, int k, int boundary_padding_thickness, float2* U, int pitch_u, int offset=0){
 			float threads_x=32;

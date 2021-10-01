@@ -33,9 +33,7 @@ namespace desal {
 			if (sos_residual_h_prev<=tol){
 					*sos_residual_h=sos_residual_h_prev;
 					return DesalStatus::Success;
-			}
-			
-		
+			}		
 			F beta_inv=1.0/beta;
 			
 			//print_vector_field_k2<<<1,1>>>(n,n, X, pitch_x,'L');
@@ -108,9 +106,7 @@ namespace desal {
 			dim3 threads=dim3(threads_per_block_x,threads_per_block_y,1);
 			dim3 blocks=dim3(blocks_x,blocks_y,1);
 			int iteration_blocks=max_jacobi_iterations/2;
-			//print_vector_field_k2<<<1,1>>>(n,n, X, pitch_x,'L');
-
-		
+			//print_vector_field_k2<<<1,1>>>(n,n, X, pitch_x,'L');	
 				
 			for (int i=0;i<iteration_blocks;i++){
 			
@@ -285,12 +281,9 @@ namespace desal {
 			}
 			
 			
-			print_vector_field_k2<<<1,1>>>(m,k, C_d, pitch_c,'W');	
+			//print_vector_field_k2<<<1,1>>>(m,k, C_d, pitch_c,'W');	
 			return jacobi_status;
-			
 		}
-		
-
 		
 		template<class F, class F2, class S>
 		DesalStatus mg_vc_poisson_2D_device(F alpha, F gamma, F eta, int boundary_padding_thickness, int m, int k, F2* B_d, size_t pitch_b, F2* C_d, size_t pitch_c, int* max_jacobi_iterations, int multigrid_stages, F jacobi_weight=1.0,F tol=0.1, F* sos_residual=nullptr, S* os=nullptr){
