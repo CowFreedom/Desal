@@ -1,38 +1,20 @@
-#define WIN32_LEAN_AND_MEAN //excludes some less frequently used Windows headers
+#undef UNICODE
+#define UNICODE
+#include <windows.h>
 
-#include <Windows.h>
+import miniengine;
 
-#include <shellapi.h>
 
-#if defined(min)
-	#undef min
-#endif
 
-#if defined(max)
-	#undef max
-#endif
 
-#if defined(CreateWindow)
-	#undef CreateWindow
-#endif
-
-//Windows Runtime Library.
-#include<wrl.h> 
-
-// Direct 12 specific header files
-
-#include <d3d12.h>
-
-#include <dxgi1_6.h>
-
-#include <d3dcompiler.h>
-
-//#include <DirectXMath.h>
-
-//D3D12 extension
-
-#include <d3dx12.h>
-
-int main(){
+int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLine, int nCmdShow){
+	int argc;
+			
+	wchar_t** argv=::CommandLineToArgvW(::GetCommandLineW(),&argc);
+			
+	miniengine::MiniEngine engine(hInstance, argv,argc);
+//	MessageBox(0,L"Hey",lpCmdLine,MB_SETFOREGROUND);
+	::LocalFree(argv);
 	
+//MessageBox(0,L"Hey",windowClassName,MB_SETFOREGROUND);
 }

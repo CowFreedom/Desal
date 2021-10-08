@@ -66,8 +66,8 @@ void multigrid_example(int m, int k, int reps){
 		auto start = std::chrono::high_resolution_clock::now(); 
 		//Function to measure
 
-		std::cout<<std::setprecision(2)<<std::fixed;
-		auto res=desal::cuda::mg_vc_poisson_2D_device<float, float2,std::ostream>(alpha, gamma,eta, 1, m,k, B, pitch_b, U, pitch_u,max_jacobi_iterations_per_stage,multigrid_stages, jacobi_weight, tol, &sos_residual,&std::cout);
+		std::cout<<std::setprecision(3)<<std::fixed;
+		auto res=desal::cuda::mg_vc_poisson_2D_device<float, float2,std::ostream>(alpha, gamma,eta, 1, m,k, B, pitch_b, U, pitch_u,max_jacobi_iterations_per_stage,multigrid_stages, jacobi_weight, tol, &sos_residual);
 		// Get ending timepoint 
 		auto stop = std::chrono::high_resolution_clock::now(); 
 		 
@@ -88,9 +88,7 @@ void multigrid_example(int m, int k, int reps){
 		}
 
 		cudaFree(B);
-		cudaFree(U);
-	
-			
+		cudaFree(U);			
 	}
 }
 
@@ -100,9 +98,9 @@ int main(){
 	cudaMemGetInfo(&free_device_memory,&total_device_memory);
 	
 	std::cout<<"This device has "<<total_device_memory/(1000000000.0)<<" Gigabytes of GPU memory\n";
-	int m=40;
-	int k=10;
-	multigrid_example(m,k, 1);
+	int m=1000;
+	int k=1000;
+	multigrid_example(m,k, 5);
 
 
 

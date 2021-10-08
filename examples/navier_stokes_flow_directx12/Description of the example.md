@@ -14,3 +14,5 @@ the example. Alternatively, you can open the build script, look for the compilat
 
 You will see fluid flow. If you don't do anything, this flow is static.
 Clicking on the render window and dragging the mouse induces a (fluid) current.
+
+This example is under active development
