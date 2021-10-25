@@ -1,8 +1,8 @@
 module;
 
 #define WIN32_LEAN_AND_MEAN //excludes some less frequently used Windows headers
-//#undef UNICODE
-//#define UNICODE
+#undef UNICODE
+#define UNICODE
 #include <Windows.h>
 
 #include <shellapi.h>
@@ -41,7 +41,6 @@ export module miniengine.renderer;
 using namespace Microsoft::WRL;
 
 namespace miniengine{
-
 	
 		
 
@@ -61,79 +60,92 @@ namespace miniengine{
 		private:
 		const uint8_t g_NumFrames=NUMFRAMES;
 		
-		
 	static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)	{
 			
-		Renderer* renderer = reinterpret_cast<Renderer*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
-			MessageBox(0,L"Hey",L"N2a",MB_SETFOREGROUND);
-			
-		if (renderer->g_IsInitialized )
-		{
-			switch (message){
-
-			case WM_PAINT:
-
-
-				renderer->Update();
-				renderer->Render();
-				break;
+		Renderer<NUMFRAMES>* renderer = reinterpret_cast<Renderer<NUMFRAMES>*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
+		//CREATESTRUCT* cs=(CREATESTRUCT*) lParam;
+		//Renderer<NUMFRAMES>* renderer=(Renderer<NUMFRAMES>*)cs->lpCreateParams;
+	//	MessageBox(0,L"Not start",L"start",MB_SETFOREGROUND);
+		//Renderer* renderer;
 				
-			case WM_SYSKEYDOWN:
-			case WM_KEYDOWN:
+		if (message== WM_CREATE)
+		{
+			// Save the DXSample* passed in to CreateWindow.
+			LPCREATESTRUCT pCreateStruct = reinterpret_cast<LPCREATESTRUCT>(lParam);
+			SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pCreateStruct->lpCreateParams));
+		}
+		
+		if(renderer){
+			if (renderer->g_IsInitialized)
 			{
-				bool alt = (::GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
-
-				switch (wParam)
+				switch (message){
+					
+				case WM_CREATE:
 				{
-				case 'V':
-					renderer->g_VSync = !renderer->g_VSync;
+					// Save the DXSample* passed in to CreateWindow.
+					LPCREATESTRUCT pCreateStruct = reinterpret_cast<LPCREATESTRUCT>(lParam);
+					SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pCreateStruct->lpCreateParams));
+				}
+
+				case WM_PAINT:
+					renderer->Update();
+					renderer->Render();
 					break;
-				case VK_ESCAPE:
+					
+				case WM_SYSKEYDOWN:
+				case WM_KEYDOWN:
+				{
+					bool alt = (::GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+
+					switch (wParam)
+					{
+					case 'V':
+						renderer->g_VSync = !renderer->g_VSync;
+						break;
+					case VK_ESCAPE:
+						::PostQuitMessage(0);
+						break;
+					case VK_RETURN:
+						if ( alt )
+						{
+					case VK_F11:
+						renderer->SetFullscreen(!renderer->g_Fullscreen);
+						}
+						break;
+					}
+				}
+				break;
+				// The default window procedure will play a system notification sound 
+				// when pressing the Alt+Enter keyboard combination if this message is 
+				// not handled.
+				case WM_SYSCHAR:
+				break;		
+
+				case WM_SIZE:
+				{
+					RECT clientRect = {};
+					::GetClientRect(renderer->g_hWnd, &clientRect);
+
+					int width = clientRect.right - clientRect.left;
+					int height = clientRect.bottom - clientRect.top;
+
+					renderer->Resize(width, height);
+					break;	
+				}					
+			   case WM_DESTROY:
 					::PostQuitMessage(0);
 					break;
-				case VK_RETURN:
-					if ( alt )
-					{
-				case VK_F11:
-					renderer->SetFullscreen(!renderer->g_Fullscreen);
-					}
-					break;
+				default:
+					return ::DefWindowProcW(hwnd, message, wParam, lParam);
 				}
-			}
-			break;
-			// The default window procedure will play a system notification sound 
-			// when pressing the Alt+Enter keyboard combination if this message is 
-			// not handled.
-			case WM_SYSCHAR:
-			break;		
-
-			case WM_SIZE:
-			{
-				RECT clientRect = {};
-				::GetClientRect(renderer->g_hWnd, &clientRect);
-
-				int width = clientRect.right - clientRect.left;
-				int height = clientRect.bottom - clientRect.top;
-
-				renderer->Resize(width, height);
-				break;	
-			}					
-		   case WM_DESTROY:
-				::PostQuitMessage(0);
-				break;
-			default:
-				return ::DefWindowProcW(hwnd, message, wParam, lParam);
 			}
 		}
 		else
 		{
-		
-				MessageBox(0,L"Not initialized",L"Notinit",MB_SETFOREGROUND);
+	//	MessageBox(0,L"Not initialized",L"Notinit",MB_SETFOREGROUND);
+				
 			return ::DefWindowProcW(hwnd, message, wParam, lParam);
 		}
-		
-		
-		return 0;
 	}	
 		
 
@@ -150,7 +162,8 @@ namespace miniengine{
 	static int run(Renderer* renderer, HINSTANCE hInstance){
 			const wchar_t* windowClassName= L"DX12WindowClass";		
 			renderer->RegisterWindowClass(hInstance, windowClassName);
-			renderer->g_hWnd = renderer->CreateWindow(renderer,windowClassName, hInstance, L"Learning DirectX 12",renderer->g_ClientWidth, renderer->g_ClientHeight);
+			
+			renderer->g_hWnd = renderer->CreateWindow(windowClassName, hInstance, L"Learning DirectX 12",renderer->g_ClientWidth, renderer->g_ClientHeight);
 	
 			// Initialize the global window rect variable.
 			::GetWindowRect(renderer->g_hWnd, &(renderer->g_WindowRect));			
@@ -291,7 +304,7 @@ namespace miniengine{
 		}
 		
 		//Creates a window with the given classname
-		HWND CreateWindow(Renderer* renderer, const wchar_t* windowClassName, HINSTANCE hInst, const wchar_t* windowTitle, uint32_t width, uint32_t height)
+		HWND CreateWindow(const wchar_t* windowClassName, HINSTANCE hInst, const wchar_t* windowTitle, uint32_t width, uint32_t height)
 		{
 
 			int screenWidth = ::GetSystemMetrics(SM_CXSCREEN);
@@ -304,7 +317,7 @@ namespace miniengine{
 			// Center the window within the screen. Clamp to 0, 0 for the top-left corner.
 			int windowX = std::max<int>(0, (screenWidth - windowWidth) / 2);
 			int windowY = std::max<int>(0, (screenHeight - windowHeight) / 2);
-
+			
 			HWND hWnd = ::CreateWindowExW(
 				NULL,
 				windowClassName,
@@ -317,9 +330,9 @@ namespace miniengine{
 				NULL,
 				NULL,
 				hInst,
-				renderer
+				this
 			);
-			MessageBox(0,L"Stop",L"Stop",MB_SETFOREGROUND);		
+			//MessageBox(0,L"Stop",L"Stop",MB_SETFOREGROUND);		
 			assert(hWnd && "Failed to create window");
 			
 			return hWnd;
@@ -350,10 +363,13 @@ namespace miniengine{
 				// is favored.
 				if ((dxgiAdapterDesc1.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) == 0 &&
 					SUCCEEDED(D3D12CreateDevice(dxgiAdapter1.Get(), 
-						D3D_FEATURE_LEVEL_11_0, __uuidof(ID3D12Device), nullptr)) && 
+						D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), nullptr)) && 
 					dxgiAdapterDesc1.DedicatedVideoMemory > maxDedicatedVideoMemory )
 				{
 					maxDedicatedVideoMemory = dxgiAdapterDesc1.DedicatedVideoMemory;
+					
+				//	MessageBox(0,L"Not initialized",std::to_wstring(maxDedicatedVideoMemory).c_str(),MB_SETFOREGROUND);
+					
 					ThrowIfFailed(dxgiAdapter1.As(&dxgiAdapter4));
 				}
 			}
@@ -599,8 +615,10 @@ namespace miniengine{
 				auto fps = frameCounter / elapsedSeconds;
 		
 				sprintf_s(buffer, 500, "FPS: %f\n", fps);
-		
-			//	OutputDebugString(buffer); //Todo
+				std::wstring wc( 500, L'#' );
+				mbstowcs( &wc[0], buffer, 500 );
+		//MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), &wstrTo[0], size_needed);
+				OutputDebugString(wc.c_str()); //Todo
 				frameCounter = 0;
 				elapsedSeconds = 0.0;
 			}
@@ -620,8 +638,8 @@ namespace miniengine{
 				CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(backBuffer.Get(),D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 				g_CommandList->ResourceBarrier(1, &barrier);
+				//FLOAT clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
 				FLOAT clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
-
 
 				CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(g_RTVDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),g_CurrentBackBufferIndex, g_RTVDescriptorSize);
 

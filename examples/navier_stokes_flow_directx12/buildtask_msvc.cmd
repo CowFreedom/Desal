@@ -6,7 +6,7 @@ set DEBUG_MODE=debug
 set curpath=%~dp0
 set cudaPath="C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.0\lib\x64\"
 set windowsSDKPath="C:\Program Files (x86)\Windows Kits\10\Include\10.0.19041.0\um"
-set latestDirectX12Headers="C:\Users\z36MXT\Code\C++\Desal\examples\navier_stokes_flow_directx12\include\directx"
+set latestDirectX12Headers="%curpath:~0,-1%\include\directx"
 echo Building executable in %DEBUG_MODE%
 
 

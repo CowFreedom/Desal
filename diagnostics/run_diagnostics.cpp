@@ -17,14 +17,13 @@ bool run_correctness_tests(std::ostream& os, bool save_metrics){
 	std::vector<desal::test::CorrectnessTest> v;
 
 	//GPU Diagnostics
-	#ifdef opt_use_cuda
+	#ifdef use_gpu
 			v.push_back(desal::test::CorrectnessTest("reduce_sum_f32_device_ascending",desal::test::corr::reduce_sum_f32_device_ascending));
 			v.push_back(desal::test::CorrectnessTest("reduce_sum_f32_device_descending",desal::test::corr::reduce_sum_f32_device_ascending));
 			v.push_back(desal::test::CorrectnessTest("reduce_sum_f64_device_ascending",desal::test::corr::reduce_sum_f64_device_ascending));
 			v.push_back(desal::test::CorrectnessTest("reduce_sum_f64_device_descending",desal::test::corr::reduce_sum_f64_device_ascending));
-
 			v.push_back(desal::test::CorrectnessTest("test_reduce_sum_of_squares_poisson_field_residual_f32_device_uniform",desal::test::corr::reduce_sum_of_squares_poisson_field_residual_f32_device_uniform));
-			v.push_back(desal::test::CorrectnessTest("test_reduce_sum_of_squares_poisson_field_residual_f32_device_uniform",desal::test::corr::mg_vc_poisson_2D_f32_zero_B));
+			v.push_back(desal::test::CorrectnessTest("test_mg_vc_poisson_2D_f32_zero_B",desal::test::corr::mg_vc_poisson_2D_f32_zero_B));
 			
 	#endif
 	
@@ -43,9 +42,7 @@ bool run_correctness_tests(std::ostream& os, bool save_metrics){
 			os<<v[i].name<<" finished erroneously\n";
 		}
 		
-		if ((i%5)==0){
-			os<<i+1<<" out of "<<v.size()<<" correctness tests finished \n";
-		}
+		os<<i+1<<" out of "<<v.size()<<" correctness tests finished \n";
 	}
 	if (save_metrics==true){
 		//desal::test::corr::save_metrics(v,oss.str());

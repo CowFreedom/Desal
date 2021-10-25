@@ -61,21 +61,22 @@ namespace desal{
 
 			
 			export bool reduce_sum_of_squares_poisson_field_residual_f32_device_uniform(std::ostream& os, CorrectnessTest& v){
-				int reps=5; //TODO: Change to 10
+				int reps=8; //TODO: Change to 10
 				int array_starting_length=5;
 				char error_message[200];
 				
-				v.test_successful=desal::cuda::test_reduce_sum_of_squares_poisson_field_residual_f32_device_uniform(array_starting_length, reps, error_message);
+				v.test_successful=desal::cuda::test_reduce_sum_of_squares_poisson_field_residual_f32_device_uniform(reps, error_message);
 				
 				return v.test_successful;
 			}	
 
 			export bool mg_vc_poisson_2D_f32_zero_B(std::ostream& os, CorrectnessTest& v){
 				int reps=1; //TODO: Change to 10
-				int array_starting_length=5;
+				int m=1000; //height of grid in points
+				int k=1000; //width of grid in points
 				char error_message[200];
 				
-				v.test_successful=desal::cuda::test_mg_vc_poisson_2D_f32_zero_B(array_starting_length, reps, error_message);
+				v.test_successful=desal::cuda::test_mg_vc_poisson_2D_f32_zero_B(error_message);
 				
 				return v.test_successful;
 			}				

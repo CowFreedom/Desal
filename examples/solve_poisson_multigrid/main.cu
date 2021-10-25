@@ -15,7 +15,6 @@
 
 void multigrid_example(int m, int k, int reps){
 
-
 	for (int i=1;i<=reps;i++){	
 		float2* U; //flow field vector
 		float2* B; //flow field vector
@@ -76,6 +75,9 @@ void multigrid_example(int m, int k, int reps){
 
 		std::cout<<std::right<<m<<std::setw(20)<<std::right<<duration.count()<<std::setw(40)<<multigrid_stages<<std::setw(30)<<sos_residual<<"\n";
 		
+		cudaFree(B);
+		cudaFree(U);
+		
 		if (sos_residual<tol && sos_residual>=0){
 			std::cout<<"The sum of squares error could be successfully reduced below the set tolerance\n\n";
 		}	
@@ -87,8 +89,7 @@ void multigrid_example(int m, int k, int reps){
 			std::cout<<"The sum of squares error could not be successfully reduced below the set tolerance. Try more multigrid stages, more iterations per stage or a higher error tolerance\n\n";
 		}
 
-		cudaFree(B);
-		cudaFree(U);			
+			
 	}
 }
 

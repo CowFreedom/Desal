@@ -22,7 +22,7 @@ namespace desal{
 					F2 v=Fs[j];
 					v.x=A[j].x+dt*v.x;
 					v.y=A[j].y+dt*v.y;
-					A[j]=v;
+					C[j]=v;
 				}
 			}		
 		}

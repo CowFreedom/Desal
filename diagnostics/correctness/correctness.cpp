@@ -4,7 +4,7 @@ module;
 export module tests.correctness;
 
 //Import GPU code
-#ifdef opt_use_cuda
+#ifdef use_gpu
 	export import :gpu;
 #endif
 

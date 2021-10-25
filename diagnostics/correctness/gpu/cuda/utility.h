@@ -44,5 +44,31 @@ namespace desal{
 			
 		__global__
 		void k_check_boundary(int n,float2* A, int pitch_a,float val);
+		
+		template<class F2>
+		__global__
+		void k_set_boundary_val(float2 val, int m, int k, F2* U, size_t pitch_u){
+			int idx=blockIdx.x*blockDim.x+threadIdx.x;			
+			if (idx>m || idx >k){
+				return;
+			}
+			F2* U_neighbor=(F2*) ((char*)U+pitch_u);	
+			for (int i=idx;i<k;i+=gridDim.x*blockDim.x){
+					U[i]=val;
+			}	
+			float2* U_ptr=(F2*) ((char*)U+(idx)*pitch_u);	
+			for (int i=idx;i<m;i+=gridDim.x*blockDim.x){	
+				U_ptr[0]=val;
+				U_ptr[m-1]=val;
+				U_ptr=(F2*) ((char*)U_ptr+pitch_u);	
+			}	
+			U_neighbor=(F2*) ((char*)U+(m-2)*pitch_u);
+			U_ptr=(F2*) ((char*)U_neighbor+pitch_u);	
+			
+			for (int i=idx;i<k;i+=gridDim.x*blockDim.x){
+				U_ptr[i]=val;	
+			}
+		}
+		
 	}
 }

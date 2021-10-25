@@ -3,6 +3,16 @@
 namespace desal{
 	namespace cuda{
 		
+		namespace reductions{
+			namespace blocksizes{
+				namespace a{
+					constexpr int MX=512;
+					constexpr int MY=2;
+				}				
+			}	
+		}
+		
+		
 		template<class F, class F2>
 		__host__
 		cudaError_t reduce_sum_of_squares_poisson_field_residual_device(F alpha, F beta, int boundary_padding_thickness, int m, int k, F2* A_d,int pitch_a, cudaTextureObject_t B_tex, F* r_d, int stride_r);
@@ -11,6 +21,10 @@ namespace desal{
 		__host__
 		cudaError_t reduce_sum_of_squares_poisson_field_residual_device(F alpha, F beta, int boundary_padding_thickness, int m, int k, F2* A_d,int pitch_a, F2* B_d, int pitch_b, F* r_d, int stride_r);
 
+		template<class F,class F2>
+		__host__
+		cudaError_t reduce_sum_of_squares_poisson_field_residual_device(F alpha, F beta, int m, int k, cudaTextureObject_t A_tex, cudaTextureObject_t B_tex, F* r_d, int stride_r);
+	
 		template<class F>
 		__host__
 		void reduce_sum_device(int n, F* r_d, int stride_r);	

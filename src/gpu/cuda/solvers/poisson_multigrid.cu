@@ -17,22 +17,22 @@ namespace desal{
 			int idy=blockIdx.y*blockDim.y+threadIdx.y;
 			int idx=blockIdx.x*blockDim.x+threadIdx.x;
 			
-			float2* X_ptr=X_ptr=(float2*) ((char*)X_new+(idy+boundary_padding_thickness)*pitch_x);	
+			F2* X_ptr=X_ptr=(F2*) ((char*)X_new+(idy+boundary_padding_thickness)*pitch_x);	
 
 			for(int i=idy;i<m;i+=gridDim.y*blockDim.y){
 					
 				for(int j = idx; j<k; j+=gridDim.x*blockDim.x){
-					float2 x=tex2D<float2>(X_old,j+boundary_padding_thickness+0.5,i+boundary_padding_thickness+0.5);
-					float2 xupper=tex2D<float2>(X_old,j+boundary_padding_thickness+0.5,i+1+boundary_padding_thickness+0.5);
-					float2 xlower=tex2D<float2>(X_old,j+boundary_padding_thickness+0.5,i-1+boundary_padding_thickness+0.5);
-					float2 xright=tex2D<float2>(X_old,j+1+boundary_padding_thickness+0.5,i+boundary_padding_thickness+0.5);
-					float2 xleft=tex2D<float2>(X_old,j-1+boundary_padding_thickness+0.5,i+boundary_padding_thickness+0.5);						
-					float2 b=tex2D<float2>(B,j+boundary_padding_thickness+0.5,i+boundary_padding_thickness+0.5);
+					F2 x=tex2D<F2>(X_old,j+boundary_padding_thickness+0.5,i+boundary_padding_thickness+0.5);
+					F2 xupper=tex2D<F2>(X_old,j+boundary_padding_thickness+0.5,i+1+boundary_padding_thickness+0.5);
+					F2 xlower=tex2D<F2>(X_old,j+boundary_padding_thickness+0.5,i-1+boundary_padding_thickness+0.5);
+					F2 xright=tex2D<F2>(X_old,j+1+boundary_padding_thickness+0.5,i+boundary_padding_thickness+0.5);
+					F2 xleft=tex2D<F2>(X_old,j-1+boundary_padding_thickness+0.5,i+boundary_padding_thickness+0.5);						
+					F2 b=tex2D<F2>(B,j+boundary_padding_thickness+0.5,i+boundary_padding_thickness+0.5);
 				//	printf("Val:(%f,%f)index: %d,%d\n",x.x,x.y, i,j);
 					X_ptr[j+boundary_padding_thickness].x=(1.0-weight)*x.x+weight*beta_inv*(xlower.x+xupper.x+xleft.x+xright.x+alpha*b.x);	
 					X_ptr[j+boundary_padding_thickness].y=(1.0-weight)*x.y+weight*beta_inv*(xlower.y+xupper.y+xleft.y+xright.y+alpha*b.y);									
 				}
-				X_ptr=(float2*) ((char*)X_ptr+(gridDim.y*blockDim.y)*pitch_x);	 //check if i+1 is correct	
+				X_ptr=(F2*) ((char*)X_ptr+(gridDim.y*blockDim.y)*pitch_x);	 //check if i+1 is correct	
 			}
 		}
 		

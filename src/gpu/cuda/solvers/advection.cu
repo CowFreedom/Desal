@@ -8,7 +8,7 @@ namespace desal{
 	
 		template<class F, class F2>
 		__global__
-		void k_advection_2D(F dt, int boundary_padding_thickness, F dy, F dx, int m_q, int k_q, F2* U, int pitch_u, cudaTextureObject_t Q, F* C, int pitch_c){
+		void k_advection_2D(F dt, int boundary_padding_thickness, F inv_dy, F inv_dx, int m_q, int k_q, F2* U, int pitch_u, cudaTextureObject_t Q, F* C, int pitch_c){
 			m_q-=2*boundary_padding_thickness;
 			k_q-=2*boundary_padding_thickness;
 			
@@ -24,8 +24,8 @@ namespace desal{
 				for (int j=idx;j<k_q;j+=gridDim.x*blockDim.x){
 
 					F2 v=U_ptr[j];
-					p.x=(j+boundary_padding_thickness+0.5f)-(dt*v.x*dx);
-					p.y=(i+boundary_padding_thickness+0.5f)-(dt*v.y*dy);
+					p.x=(j+boundary_padding_thickness+0.5f)-(dt*v.x*inv_dx);
+					p.y=(i+boundary_padding_thickness+0.5f)-(dt*v.y*inv_dy);
 					F q=tex2D<F>(Q,p.x,p.y);
 					C_ptr[j]=q;					
 				}		
@@ -37,7 +37,7 @@ namespace desal{
 		
 		template<class F, class F2>
 		__global__
-		void k_advection_field_2D(F dt, int boundary_padding_thickness, F dy, float dx, int m_q, int k_q, F2* U, int pitch_u, cudaTextureObject_t Q, F2* C, int pitch_c){
+		void k_advection_field_2D(F dt, int boundary_padding_thickness, F inv_dy, float inv_dx, int m_q, int k_q, F2* U, int pitch_u, cudaTextureObject_t Q, F2* C, int pitch_c){
 			m_q-=2*boundary_padding_thickness;
 			k_q-=2*boundary_padding_thickness;
 			
@@ -50,11 +50,11 @@ namespace desal{
 			F2* C_ptr=(F2*) ((char*)C+(boundary_padding_thickness+idy)*pitch_c)+boundary_padding_thickness;
 
 			for (int i=idy; i<m_q;i+=gridDim.y*blockDim.y){
-				for (int j=idx;j<(k_q-1);j+=gridDim.x*blockDim.x){
+				for (int j=idx;j<k_q;j+=gridDim.x*blockDim.x){
 
 					F2 v=U_ptr[j];
-					p.x=(j+boundary_padding_thickness+0.5f)-(dt*v.x*dx);
-					p.y=(i+boundary_padding_thickness+0.5f)-(dt*v.y*dy);
+					p.x=(j+boundary_padding_thickness+0.5f)-(dt*v.x*inv_dx);
+					p.y=(i+boundary_padding_thickness+0.5f)-(dt*v.y*inv_dy);
 					F2 q=tex2D<F2>(Q,p.x,p.y);
 					C_ptr[j].x=q.x;
 					C_ptr[j].y=q.y;					
@@ -110,7 +110,7 @@ namespace desal{
 			dim3 threads=dim3(threads_per_block_x,threads_per_block_y,1);
 			dim3 blocks=dim3(blocks_x,blocks_y,1);
 
-			k_advection_field_2D<F,F2><<<blocks,threads>>>(dt,boundary_padding_thickness,dy,dx,m_q,k_q,U_d,pitch_u,Q_tex,C_d,pitch_c);
+			k_advection_field_2D<F,F2><<<blocks,threads>>>(dt,boundary_padding_thickness,1/dy,1/dx,m_q,k_q,U_d,pitch_u,Q_tex,C_d,pitch_c);
 			return DesalStatus::Success;
 		}
 		
@@ -163,7 +163,7 @@ namespace desal{
 			dim3 threads=dim3(threads_per_block_x,threads_per_block_y,1);
 			dim3 blocks=dim3(blocks_x,blocks_y,1);
 
-			k_advection_2D<F,F2><<<blocks,threads>>>(dt,boundary_padding_thickness,dy,dx,m_q,k_q,U_d,pitch_u,Q_tex,C_d,pitch_c);
+			k_advection_2D<F,F2><<<blocks,threads>>>(dt,boundary_padding_thickness,1/dy,1/dx,m_q,k_q,U_d,pitch_u,Q_tex,C_d,pitch_c);
 			return DesalStatus::Success;
 		}
 	}

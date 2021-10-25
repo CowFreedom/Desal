@@ -8,6 +8,32 @@
 
 namespace desal{
 	namespace cuda{
+		/*
+		__global__
+		template<class F2>
+		void k_boundary(float scale, int m, int k, F2* U, size_t pitch_u){
+			int idx=blockIdx.x*blockDim.x+threadIdx.x;			
+			F2* U_neighbor=(F2*) ((char*)U+1*pitch_u);	
+			F2 p;
+			for (int i=idx;i<k;i+=gridDim.x*blockDim.x){
+					p=U_neighbor[i];
+					U[j]=scale*p;					
+			}	
+			
+			for (int i=idx;i<m-1;i+=gridDim.x*blockDim.x){
+				U=(F2*) ((char*)U+pitch_u);	
+				p=U[1];
+				U[0]=scale*p;	
+				p=U[m-2];
+				U[m-1]=scale*p;						
+			}	
+			U_neighbor=(F2*) ((char*)U);
+			U=(F2*) ((char*)U+pitch_u);	
+			for (int i=idx;i<k;i+=gridDim.x*blockDim.x){
+				p=U_neighbor[i];
+				U[j]=scale*p;					
+			}
+		}	*/	
 		
 		template<class F, class F2>
 		inline DesalStatus navier_stokes_2D_nobuf_device(F dt, F viscousity, int boundary_padding_thickness, F dy, F dx,  int m_q,  int k_q, F2* U_d, int pitch_u, F* U_buf, int pitch_u_buf, F** MG_buf, int* pitch_mg_buf ,F** mg_r_buf, int* pitch_mg_r_buf, int* max_jacobi_iterations, int multigrid_stages, F jacobi_weight,  F mg_tol, F* mg_sos_error_d){//more buffers){
@@ -86,12 +112,11 @@ namespace desal{
 
 			advection_field_2D_device<F,F2>(dt,1,dy,dx,m,k,U_old,pitch_u_old,U_old,pitch_u_old,U_new,pitch_u_new);
 			//solve Diffusion
-		//	print_vector_field_k2<<<1,1>>>(m,k, U_old, pitch_u_old,'B');
-		//	print_vector_field_k2<<<1,1>>>(m,k, U_new, pitch_u_new,'A');		
+			//print_vector_field_k2<<<1,1>>>(m,k, U_old, pitch_u_old,'B');
+			//print_vector_field_k2<<<1,1>>>(m,k, U_new, pitch_u_new,'A');		
 			float alpha=(dx*dy)/(viscousity*dt); //see manual for details
 			float gamma=alpha; //see manual for details
 			float eta=4.0; //see manual for details		
-			
 			
 			DesalStatus mg_result=mg_vc_poisson_2D_nobuf_device<F,F2,S>(alpha, gamma, eta, boundary_padding_thickness, m,k, U_new, pitch_u_new, U_old, pitch_u_old, mg_U_buf, pitch_mg_u_buf, mg_r_buf, pitch_mg_r_buf, max_jacobi_iterations, multigrid_stages, jacobi_weight, mg_tol , mg_sos_residual_d, &mg_sos_residual_h, os);	
 
@@ -123,8 +148,8 @@ namespace desal{
 			
 			
 			
-			return mg_result;
-			
+		//	return mg_result;
+			return DesalStatus::Success;
 		}
 		
 		
