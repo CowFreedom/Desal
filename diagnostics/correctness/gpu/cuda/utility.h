@@ -1,5 +1,5 @@
 #pragma once 
-
+#include <stdio.h>
 namespace desal{
 	namespace cuda{
 
@@ -68,6 +68,22 @@ namespace desal{
 			for (int i=idx;i<k;i+=gridDim.x*blockDim.x){
 				U_ptr[i]=val;	
 			}
+		}
+		
+		
+		__global__
+		void print_vector_field(int m,int k, float2* M, int pitch,char name, int iteration){
+			if (iteration!=0){
+				printf("iteration: %d\n",iteration);
+			}
+			printf("%c:\n",name);
+			for (int i=0;i<m;i++){
+				float2* current_row=(float2*)((char*)M + i*pitch);
+				for (int j=0;j<k;j++){
+					printf("(%.1f,%.1f) ",current_row[j].x,current_row[j].y);
+				}
+				printf("\n");
+			}	
 		}
 		
 	}
