@@ -9,7 +9,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import os
 
 
-n=4000
+n=400
 reps=1
 
 '''
@@ -25,7 +25,7 @@ hax.axis("off")
 plt.tight_layout()
 '''
 
-'''
+
 
 fig=plt.figure()
 
@@ -39,8 +39,6 @@ for a in range(reps):
 		data=np.loadtxt(path,delimiter=",")
 		im1=plt.imshow(data,cmap=cm.magma,animated=True,vmin=0, vmax=7)
 		frames.append([im1])
-		if i% 10 ==0:
-			fig.savefig(os.path.dirname(os.path.abspath(__file__))+"/output/animation_poisson_changing_boundary"+str(i)+".svg",transparent=True)
 
 
 		
@@ -48,8 +46,8 @@ for a in range(reps):
 ani=animation.ArtistAnimation(fig,frames,interval=2,blit=True,repeat_delay=10)
 path=os.path.dirname(os.path.abspath(__file__))+"/"
 ani.save(path+"movie.gif")
-'''
 
+'''
 fig=plt.figure()
 
 for i in range(n):
@@ -75,8 +73,8 @@ for i in range(n):
 		#hax.axis("off")
 		plt.tight_layout()
 
-		plt.savefig(os.path.dirname(os.path.abspath(__file__))+"/output/animation_poisson_changing_boundary"+str(i)+".svg",transparent=True)
+		#plt.savefig(os.path.dirname(os.path.abspath(__file__))+"/output/animation_poisson_changing_boundary"+str(i)+".svg",transparent=True)
 		plt.close()
 
-
+'''
 plt.show()

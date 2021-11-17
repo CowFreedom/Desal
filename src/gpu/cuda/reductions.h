@@ -371,14 +371,12 @@ namespace desal{
 		
 		
 		inline int restrict_n(int n){
-
-			if ((n%2) ==false){
+			if ((n%2) != 0){
 				return (n-1)*0.5+1;
 			}
 			else{ 
 				return 0.5*(n-2)+2;
-			}
-			
+			}			
 		}
 
 		template<class F, class F2>

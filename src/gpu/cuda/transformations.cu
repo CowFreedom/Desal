@@ -8,13 +8,11 @@ namespace desal{
 		template< class F, class F2>
 		__global__
 		void k_transform_entries_into_residuals(F alpha_inv, F beta, int boundary_padding_thickness, int m, int k, cudaTextureObject_t A,cudaTextureObject_t B, F2* r, int pitch_r){
-		//printf("Durch\n");
 			m-=2*boundary_padding_thickness;
 			k-=2*boundary_padding_thickness;
 			if (k< (blockIdx.x*blockDim.x) || m<(blockIdx.y*blockDim.y)){
 				return;
 			}
-			//printf("n: %d, idx:%d, idy: %d\n",n,blockIdx.x*blockDim.x,blockIdx.y*blockDim.y);
 
 			int idy=blockIdx.y*blockDim.y+threadIdx.y;
 			int idx=blockIdx.x*blockDim.x+threadIdx.x;

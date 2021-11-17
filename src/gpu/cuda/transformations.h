@@ -107,6 +107,7 @@ namespace desal{
 			
 			dim3 threads=dim3(threads_per_block_x,threads_per_block_y,1);
 			dim3 blocks=dim3(blocks_x,blocks_y,1);
+
 			k_prolong_by_interpolation_and_add<<<blocks,threads>>>(hy,hx,m_p,k_p, dest, pitch_dest, src_tex);
 			return cudaSuccess;
 		}

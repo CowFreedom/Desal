@@ -19,7 +19,7 @@ if defined USE_CUDA (
 	nvcc -O3 %curpath:~0,-1%\..\..\diagnostics\correctness\gpu\cuda\utility.cu -c -o gpu_test_utility.obj
 	
 
-	nvcc -D %DEBUG_MODE% -O3  %curpath:~0,-1%\main.cu gpu_reductions.obj gpu_advection.obj gpu_poisson.obj gpu_transformations.obj gpu_test_utility.obj -o main.exe
+	nvcc -D %DEBUG_MODE% -O3  %curpath:~0,-1%\main.cu gpu_reductions.obj gpu_poisson.obj gpu_transformations.obj gpu_advection.obj gpu_test_utility.obj -o main.exe
 )
 
 del *.o *.out *.obj *.exp *.lib *.ifc
