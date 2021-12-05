@@ -5,7 +5,7 @@
 * Allows simulation of fluid flux with respect to internal contentration polarization (ICP), salt accumulation and fouling
 * **No dependencies** except for a recent C++ and optional NVCC compiler
 
-Desal serves as a sample application for the algorithms described on [keinefirma.xyz](keinefirma.xyz/documents/book).
+Desal serves as a sample application for the algorithms described on [keinefirma.xyz](keinefirma.xyz/documents/fluid_tutorial).
 The intention is to introduce people to accelerated scientific computing.
 
 ## Installation
