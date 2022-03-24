@@ -34,12 +34,12 @@ void write_data_to_file(int m, int k, float2* U_d, size_t pitch, std::string pat
 
 __device__
 float a(float t){
-	return 15*sin(0.25*t)+15;
+	return 20;
 }
 
 
 __global__
-void k_set_inner_points(int m, int k, float height, float width, float2* U, size_t pitch_u){
+void k_set_inner_points(float boundary_temperature, float interior_temperature, int m, int k, float height, float width, float2* U, size_t pitch_u){
 	m-=1;
 	k-=1;
 	int idx=blockIdx.x*blockDim.x+threadIdx.x+1;			
@@ -47,17 +47,22 @@ void k_set_inner_points(int m, int k, float height, float width, float2* U, size
 	
 	U=(float2*)((char*)U+idy*pitch_u);
 
-	float c1=0.5*k;
-	float c2=0.5*m;
-	float r=(1.5/height)*m;
-	r*=(1.5/width)*k;
-	//float eps=0.01;
+	float2 bu;
+	bu.x=0.5*k+0.5*(1/width)*k;
+	bu.y=0.5*m+0.5*(1/height)*m;
+	float2 bl;
+	bl.x=0.5*k-0.5*(1/width)*k;
+	bl.y=0.5*m-0.5*(1/height)*m;
+
 	for (int i=idy;i<m;i+=blockDim.y*gridDim.y){
 		for (int j=idx; j<k;j+=blockDim.x*gridDim.x){
-			float d1=(j-c1)*(j-c1);
-			float d2=(i-c2)*(i-c2);
 			
-			U[j].x=a(0)*0.5*(1+tanh(r-d1-d2));
+			float dx=max(bl.x-j,j-bu.x);
+			float dy=max(bl.y-i,i-bu.y);
+			dx=max(0.0,dx);
+			dy=max(0.0,dy);
+		
+			U[j].x=boundary_temperature+(2*(interior_temperature-boundary_temperature)*0.5*(1+tanh(-(dx*dx+dy*dy))));
 			U[j].y=0;
 		}
 		U=(float2*)((char*)U+pitch_u);	
@@ -87,7 +92,7 @@ void k_set_boundary_val(float t, int m, int k, F2* U, size_t pitch_u){
 	}
 }
 
-void multigrid_example(float height, float width, int m, int k, float tend){
+void multigrid_example(float interior_temperature, float height, float width, int m, int k, float tend){
 
 	float dt=0.0125;
 	float dx=width/k;
@@ -95,7 +100,7 @@ void multigrid_example(float height, float width, int m, int k, float tend){
 	int multigrid_stages=5;
 	int max_jacobi_iterations_per_stage[]={5000,5000,4000,5000,10000,10000,10000,10000,2000,2000};//maximum number of iterations per multigrid stage
 	float jacobi_weight=1; //weight factor of the weighted Jacobi method
-	float tol=1e-1; //if sum of squares of the residual goes below this value, the estimation of x in Ax=b terminates and returns DesalStatus::Success
+	float tol=1e-3*((m-1)*(k-1)); //if sum of squares of the residual goes below this value, the estimation of x in Ax=b terminates and returns DesalStatus::Success
 	float early_termination_tol=1; //if residual_prev/residual_current is above early_termination_tol, then a Jacobi Iteration finishes early due to diminishing returns. If set to 1 then the iterations will not terminate early
 	float sos_residual=-1; // this saves the sum of squares of the residual
 
@@ -118,18 +123,17 @@ void multigrid_example(float height, float width, int m, int k, float tend){
 	
 	cudaMemset2D(B,pitch_b,0.0,sizeof(float2)*k,m);	
 	
-
-	k_set_boundary_val<float2><<<dim3(ceil(m/32.0),1,1),dim3(32,1,1)>>>(0, m, k, U, pitch_u);
-	k_set_boundary_val<float2><<<dim3(ceil(m/32.0),1,1),dim3(32,1,1)>>>(0, m, k, B, pitch_b);
+	cudaMemset2D(U,pitch_u,0.0,sizeof(float2)*k,m);	
+	float boundary_temperature=20;
+	k_set_boundary_val<float2><<<dim3(ceil(m/32.0),1,1),dim3(32,1,1)>>>(20, m, k, U, pitch_u);
+	k_set_boundary_val<float2><<<dim3(ceil(m/32.0),1,1),dim3(32,1,1)>>>(20, m, k, B, pitch_b);
 	//k_set_inner_points<<<dim3(ceil(m/32.0),1,1),dim3(32,1,1)>>>(m,k,U,pitch_u);
-	//k_set_inner_points<<<dim3(ceil(m/32.0),1,1),dim3(32,1,1)>>>(m,k,height, width, B,pitch_b);
+	k_set_inner_points<<<dim3(ceil(m/32.0),1,1),dim3(32,1,1)>>>(boundary_temperature, interior_temperature,m,k,height, width, B,pitch_b);
 
-	cudaDeviceSynchronize();
 
 //desal::cuda::print_vector_field_k2<<<1,1>>>(m,k, B, pitch_b,'B');
 	//desal::cuda::print_vector_field_k2<<<1,1>>>(m,k, U, pitch_u,'U');
 	write_data_to_file(m, k, B, pitch_b, "output/", "output", 0);	
-return;
 	int iter=1;
 
 	for (float t=dt;t<=tend;t+=dt){	
@@ -185,11 +189,12 @@ int main(){
 	cudaMemGetInfo(&free_device_memory,&total_device_memory);
 	
 	std::cout<<"This device has "<<total_device_memory/(1000000000.0)<<" Gigabytes of GPU memory\n";
-	float height=10.0;
-	float width=10.0;
-	int m=100;
-	int k=100;
-	multigrid_example(height,width,m,k,50);
+	float height=3.0;
+	float width=3.0;
+	int m=1000;
+	int k=1000;
+	float interior_temperature=85;
+	multigrid_example(interior_temperature,height,width,m,k,5);
 
 
 

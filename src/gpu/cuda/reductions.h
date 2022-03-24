@@ -94,13 +94,14 @@ namespace desal{
 			static __shared__ F sdata[memsize];
 			F* r_ptr=r;
 			int tx=threadIdx.x;
+			int index=blockIdx.x*2*blockDim.x+tx;
 			sdata[tx]=F(0.0);
 			F partial_sum=0.0;
 			for (int hs=0;hs<n;hs+=gridDim.x*2*blockDim.x){
 					r_ptr=r+hs;
-					int index=blockIdx.x*2*blockDim.x+tx;
 
-					sdata[tx]=(((index+hs)<n)?r_ptr[index]:0.0)+(((index+hs+blockDim.x)<n)? r_ptr[index+blockDim.x]:0.0);
+
+					sdata[tx]=(((index+hs)<n)?r_ptr[index]:0.0)+(((index+hs+blockDim.x)<n)? r_ptr[index+hs+blockDim.x]:0.0);
 			
 					__syncthreads();
 					

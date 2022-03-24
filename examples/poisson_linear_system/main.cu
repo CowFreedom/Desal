@@ -2,7 +2,7 @@
  * This example calculates (I-M)u=b, with I being an identity and M a forward difference matrix. In addition, u,b are vectors specifying the grid points.
  * The calculation is conducted via a V-Cycle multigrid algorith with multiple stages.
  * It shall be noted, that if the number of stages is increased, the resulting residual error decreases.
- * For maximum effect, the number of maximum iterations of each stage should be chosen such that the squared residual barely changes within Jacobi iterations.
+ * For minimum error, the number of maximum iterations of each stage should be chosen until that the squared residual barely changes within Jacobi iterations.
  */
  
 #include <iostream>
